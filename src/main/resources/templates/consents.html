@@ -1,0 +1,24 @@
+<div xmlns:th="http://www.w3.org/1999/xhtml">
+    <div th:if="${#lists.isEmpty(consents)}">
+        <p>None Recorded</p>
+    </div>
+    <div th:if="${not #lists.isEmpty(consents)}">
+        <table>
+            <thead>
+            <tr>
+                <!-- <th>Condtion</th> -->
+                <th>Role</th>
+                <th>Organisation</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="consent : ${consents}">
+
+                <td th:text="${consent.getActorFirstRep().getRole().getCodingFirstRep().getDisplay()}">Unknown</td>
+                <td th:text="${consent.getActorFirstRep().getReference().getDisplay()}">No Condition given</td>
+
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

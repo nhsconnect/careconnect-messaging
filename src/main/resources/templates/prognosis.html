@@ -1,0 +1,39 @@
+<div xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <div th:if="${not #lists.isEmpty(risks)}">
+        <table>
+            <thead>
+            <tr>
+               <!-- <th>Condtion</th> -->
+                <th>Outcome</th>
+                <th>Risk</th>
+            </tr>
+            </thead>
+            <tbody>
+                <tr th:each="risk : ${risks}">
+
+                    <td th:text="${risk.getPredictionFirstRep().getOutcome().getCodingFirstRep().getDisplay()}">Unknown</td>
+                    <td th:text="${risk.getPredictionFirstRep().getQualitativeRisk().getCodingFirstRep().getDisplay()}">No Condition given</td>
+
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div th:if="${not #lists.isEmpty(impressions)}">
+        <table>
+            <thead>
+            <tr>
+
+                <th>Outcome</th>
+
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="impression : ${impressions}">
+
+                <td th:text="${impression.getPrognosisCodeableConceptFirstRep().getCodingFirstRep().getDisplay()}">Unknown</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -1,0 +1,22 @@
+<div xmlns:th="http://www.w3.org/1999/xhtml">
+    <div th:if="${#lists.isEmpty(questionnaireResponse)}">
+        <p>None Recorded</p>
+    </div>
+    <th:block th:if="${not #lists.isEmpty(questionnaireResponse)}">
+        <th:block th:each="form : ${questionnaireResponse}">
+
+            <th:block th:each="item : ${form.getItem()}">
+
+                        <p><b th:text="${item.getText()}">No description given</b></p>
+                <th:block th:if="${item.getAnswerFirstRep()!=null}">
+                    <th:block th:if="${item.getAnswerFirstRep().hasValueStringType()}">
+                        <i th:text="${item.getAnswerFirstRep().getValueStringType().getValue()}">answer</i>
+                    </th:block>
+                    <th:block th:if="${item.getAnswerFirstRep().hasValueCoding()}">
+                        <i th:text="${item.getAnswerFirstRep().getValueCoding().getDisplay()}">answer</i>
+                    </th:block>
+                </th:block>
+            </th:block>
+        </th:block>
+    </th:block>
+</div>

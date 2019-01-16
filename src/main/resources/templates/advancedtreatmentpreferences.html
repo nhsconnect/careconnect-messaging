@@ -1,0 +1,18 @@
+<div xmlns:th="http://www.w3.org/1999/xhtml">
+    <div th:if="${#lists.isEmpty(questionnaireResponse)}">
+        <p>None Recorded</p>
+    </div>
+    <th:block th:if="${not #lists.isEmpty(questionnaireResponse)}">
+        <th:block th:each="form : ${questionnaireResponse}">
+
+            <th:block th:each="item : ${form.getItem()}">
+                <th:block th:if="${item.getLinkId()} eq 'eolc-atp'">
+                    <p><b th:text="${item.getText()}">No description given</b></p>
+                    <span th:each="subitem : ${item.getItem()}">
+                            <p><i th:text="${subitem.getText()}">No description given</i></p>
+                    </span>
+                </th:block>
+            </th:block>
+        </th:block>
+    </th:block>
+</div>

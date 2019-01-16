@@ -1,0 +1,23 @@
+<div xmlns:th="http://www.w3.org/1999/xhtml">
+    <div th:if="${#lists.isEmpty(conditions)}">
+        <p>None Recorded</p>
+    </div>
+    <div th:if="${not #lists.isEmpty(conditions)}">
+        <table>
+            <thead>
+            <tr>
+                <th>Date</th>
+                <th>Type</th>
+
+            </tr>
+            </thead>
+            <tbody>
+                <tr th:each="condition : ${conditions}">
+                    <td th:text="${condition.getAssertedDate() != null} ? ${#dates.format(condition.getAssertedDate(),'dd MMM YYYY')}">Unknown</td>
+                    <td th:text="${condition.hasCode()} ? ${condition.getCode().getCodingFirstRep().getDisplay()}">No Condition given</td>
+
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

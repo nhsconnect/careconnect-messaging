@@ -1,0 +1,20 @@
+<div xmlns:th="http://www.w3.org/1999/xhtml">
+
+    <div th:if="${not #lists.isEmpty(careplans)}">
+        <table>
+            <thead>
+            <tr>
+               <!-- <th>Condtion</th> -->
+                <th>Actitity</th>
+
+            </tr>
+            </thead>
+            <tbody>
+                <tr th:each="carePlan : ${careplans}">
+                        <td th:text="${carePlan.getActivityFirstRep().getDetail().getDescription()}">Unknown</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
