@@ -18,10 +18,11 @@ import java.util.Map;
 
 public class BundleMessage implements Processor {
 
-    public BundleMessage(FhirContext ctx, String hapiBase) {
+    public BundleMessage(FhirContext ctx, String hapiBase, String edmsBase) {
 
         this.ctx = ctx;
         this.hapiBase = hapiBase;
+        this.edmsBase = edmsBase;
     }
 
     CamelContext context;
@@ -29,6 +30,8 @@ public class BundleMessage implements Processor {
     FhirContext ctx;
 
     private String hapiBase;
+
+    private String edmsBase;
 
     private Map<String, Resource> resourceMap;
 
@@ -54,7 +57,7 @@ public class BundleMessage implements Processor {
             log.info("Failed to parse: "+bundleString);
             throw ex;
         }
-        BundleCore bundleCore = new BundleCore(ctx,context,bundle, hapiBase);
+        BundleCore bundleCore = new BundleCore(ctx,context,bundle, hapiBase, edmsBase);
         try {
 
 

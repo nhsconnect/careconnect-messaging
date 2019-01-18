@@ -20,7 +20,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.io.InputStream;
 
 @Component
-public class BundleTIEResourceProvider implements IResourceProvider {
+public class BundleOLDResourceProvider implements IResourceProvider {
 
     @Autowired
     CamelContext context;
@@ -32,7 +32,7 @@ public class BundleTIEResourceProvider implements IResourceProvider {
     @Autowired
     ResourceTestProvider resourceTestProvider;
 */
-    private static final Logger log = LoggerFactory.getLogger(BundleTIEResourceProvider.class);
+    private static final Logger log = LoggerFactory.getLogger(BundleOLDResourceProvider.class);
 
     @Override
     public Class<Bundle> getResourceType() {

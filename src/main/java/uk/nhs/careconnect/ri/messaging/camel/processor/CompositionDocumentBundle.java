@@ -22,9 +22,10 @@ public class CompositionDocumentBundle implements AggregationStrategy {
      the DocumentIndex server (ccri - EPR)
 
      */
-    public CompositionDocumentBundle(FhirContext ctx, String hapiBase) {
+    public CompositionDocumentBundle(FhirContext ctx, String hapiBase, String edmsBase) {
         this.ctx = ctx;
         this.hapiBase = hapiBase;
+        this.edmsBase = edmsBase;
     }
 
     CamelContext context;
@@ -40,6 +41,8 @@ public class CompositionDocumentBundle implements AggregationStrategy {
     private static final Logger log = LoggerFactory.getLogger(CompositionDocumentBundle.class);
 
     private String hapiBase;
+
+    private String edmsBase;
 
     @Override
     public Exchange aggregate(Exchange originalExchange, Exchange edmsExchange) {
@@ -66,7 +69,7 @@ public class CompositionDocumentBundle implements AggregationStrategy {
 
                     }
                     try {
-                        BundleCore bundleCore = new BundleCore(ctx, context, bundle, hapiBase);
+                        BundleCore bundleCore = new BundleCore(ctx, context, bundle, hapiBase, edmsBase);
                         if (patient != null) {
                             if (patient.getId() != null) {
                                 bundleCore.searchAddResource(patient.getId());

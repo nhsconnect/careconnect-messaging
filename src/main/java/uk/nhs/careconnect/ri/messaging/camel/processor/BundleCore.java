@@ -22,12 +22,13 @@ import java.util.Map;
 
 public class BundleCore {
 
-    public BundleCore(FhirContext ctx, CamelContext camelContext, Bundle bundle, String hapiBase) {
+    public BundleCore(FhirContext ctx, CamelContext camelContext, Bundle bundle, String hapiBase, String edmsBase) {
         this.ctx = ctx;
         this.bundle = bundle;
         this.context = camelContext;
         this.client = FhirContext.forDstu3().newRestfulGenericClient("https://directory.spineservices.nhs.uk/STU3");
         this.hapiBase = hapiBase;
+        this.edmsBase = edmsBase;
     }
 
     CamelContext context;
@@ -37,6 +38,8 @@ public class BundleCore {
     IGenericClient client;
 
     private String hapiBase;
+
+    private String edmsBase;
 
 /*
     private FHIRMedicationStatementToFHIRMedicationRequestTransformer
@@ -3493,7 +3496,7 @@ public class BundleCore {
                         if (resource == null) {
                             referenceMissing(documentReference, contentComponent.getAttachment().getUrl());
                         }
-                        contentComponent.getAttachment().setUrl(hapiBase + "/Binary/" + resource.getId());
+                        contentComponent.getAttachment().setUrl(edmsBase + "/Binary/" + resource.getId());
                     }
 
                 }

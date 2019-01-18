@@ -39,6 +39,9 @@ public class CamelRoute extends RouteBuilder {
 	@Value("${ccri.server.base}")
     private String hapiBase;
 
+	@Value("${ccri.edms.server.base}")
+	private String edmsBaseFHIR;
+
 	
     @Override
     public void configure() 
@@ -49,8 +52,8 @@ public class CamelRoute extends RouteBuilder {
 		GatewayPostProcessor camelPostProcessor = new GatewayPostProcessor();
 
 		FhirContext ctx = FhirContext.forDstu3();
-		BundleMessage bundleMessage = new BundleMessage(ctx, hapiBase);
-        CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, hapiBase);
+		BundleMessage bundleMessage = new BundleMessage(ctx, hapiBase, edmsBaseFHIR);
+        CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, hapiBase, edmsBaseFHIR);
         //DocumentReferenceDocumentBundle documentReferenceDocumentBundle = new DocumentReferenceDocumentBundle(ctx,hapiBase);
        // BinaryResource binaryResource = new BinaryResource(ctx, hapiBase);
 
@@ -71,12 +74,7 @@ public class CamelRoute extends RouteBuilder {
 
 
 		// Complex processing
-/*
-		from("direct:FHIRBundleCollection")
-				.routeId("Bundle Collection Queue")
-				.process(camelProcessor) // Add in correlation Id if not present
-				.wireTap("seda:FHIRBundleCollection");
-*/
+
 		// This bundle goes to the EDMS Server. See also Binary
 		from("direct:FHIRBundleDocument")
 				.routeId("Bundle Document")
