@@ -193,16 +193,16 @@ public class BundleCore {
                             resource = searchAddCondition(referenceId, (Condition) iResource);
                         } else if (iResource instanceof Procedure) {
                             resource = searchAddProcedure(referenceId, (Procedure) iResource);
-                        } else if (iResource instanceof Composition) {
-                            resource = searchAddComposition(referenceId, (Composition) iResource);
-                        } else if (iResource instanceof DiagnosticReport) {
-                            resource = searchAddDiagnosticReport(referenceId, (DiagnosticReport) iResource);
+                      //  } else if (iResource instanceof Composition) {
+                      //      resource = searchAddComposition(referenceId, (Composition) iResource);
+                      //  } else if (iResource instanceof DiagnosticReport) {
+                      //      resource = searchAddDiagnosticReport(referenceId, (DiagnosticReport) iResource);
                         } else if (iResource instanceof MedicationRequest) {
                             resource = searchAddMedicationRequest(referenceId, (MedicationRequest) iResource);
                         } else if (iResource instanceof MedicationStatement) {
                             resource = searchAddMedicationStatement(referenceId, (MedicationStatement) iResource);
-                        } else if (iResource instanceof ListResource) {
-                            resource = searchAddList(referenceId, (ListResource) iResource);
+                      //  } else if (iResource instanceof ListResource) {
+                      //      resource = searchAddList(referenceId, (ListResource) iResource);
                         } else if (iResource instanceof Immunization) {
                             resource = searchAddImmunization(referenceId, (Immunization) iResource);
 
@@ -3230,6 +3230,7 @@ public class BundleCore {
         return eprCondition;
     }
 
+    /*
     public Composition searchAddComposition(String compositionId, Composition composition) {
         log.debug("Composition searchAdd " +compositionId);
 
@@ -3377,6 +3378,7 @@ public class BundleCore {
 
         return eprComposition;
     }
+    */
 
     public Binary searchAddBinary(String binaryId, Binary binary) {
 
