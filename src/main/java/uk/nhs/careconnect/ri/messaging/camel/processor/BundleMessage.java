@@ -63,7 +63,8 @@ public class BundleMessage implements Processor {
         if (iresource instanceof Bundle) {
             bundle = (Bundle) iresource;
         } else if (iresource instanceof OperationOutcome) {
-            log.error("Server Returned: " + ctx.newJsonParser().encodeResourceToString(iresource));
+            String responseCode = exchange.getIn().getHeader(Exchange.HTTP_RESPONSE_CODE).toString();
+            log.error("Server Returned: Status Code = " +responseCode + " "+ ctx.newJsonParser().encodeResourceToString(iresource));
             OperationOutcomeFactory.convertToException((OperationOutcome) iresource);
         } else {
             throw new UnprocessableEntityException(bundleString);

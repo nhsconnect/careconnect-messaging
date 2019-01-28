@@ -1,6 +1,7 @@
 package uk.nhs.careconnect.ri.messaging.camel.processor;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.processor.aggregate.AggregationStrategy;
@@ -152,9 +153,11 @@ public class CompositionDocumentBundle implements AggregationStrategy {
                         edmsExchange.getIn().setBody(ctx.newXmlParser().encodeResourceToString(bundleCore.getUpdatedBundle()));
 
                         //log.info(ctx.newXmlParser().encodeResourceToString(bundleCore.getBundle()));
-                    } catch (Exception ex) {
+                    }
+                    catch (Exception ex) {
                         // A number of the HAPI related function will return exceptions.
                         // Convert to operational outcomes
+                        log.error("Error During during aggregaton = "+ex.getMessage() + " "+ex.getClass().getSimpleName());
                         OperationOutcome operationOutcome = new OperationOutcome();
                         OperationOutcome.IssueType issueType = OperationOutcomeFactory.getIssueType(ex);
 
@@ -162,6 +165,7 @@ public class CompositionDocumentBundle implements AggregationStrategy {
                                 .setSeverity(OperationOutcome.IssueSeverity.ERROR)
                                 .setCode(issueType)
                                 .setDiagnostics(ex.getMessage());
+                        edmsExchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE,"400");
                         edmsExchange.getIn().setBody(ctx.newXmlParser().encodeResourceToString(operationOutcome));
                     }
 

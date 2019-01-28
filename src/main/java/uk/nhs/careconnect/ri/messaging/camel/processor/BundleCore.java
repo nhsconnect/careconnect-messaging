@@ -4,6 +4,7 @@ import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
+import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.apache.camel.*;
 import org.hl7.fhir.dstu3.model.*;
@@ -335,9 +336,10 @@ public class BundleCore {
             }
         }
         if (iresource instanceof OperationOutcome) {
+            log.error("Operation outcome with Resonse Code = " + responseCode);
             processOperationOutcome((OperationOutcome) iresource);
         }
-        if (responseCode.equals("200") && responseCode.equals("201")) {
+        if (!responseCode.equals("200") || !responseCode.equals("201")) {
             log.error("Unexpected Error on "+exchange.getIn().getHeader(Exchange.HTTP_PATH).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_QUERY).toString());
         }
         return iresource;
@@ -377,13 +379,23 @@ public class BundleCore {
                 log.error((String) exchange.getIn().getBody());
                 throw new InternalErrorException((String) exchange.getIn().getBody());
             }
+            String responseCode = exchange.getIn().getHeader(Exchange.HTTP_RESPONSE_CODE).toString();
             InputStream inputStream = (InputStream) exchange.getIn().getBody();
 
             Reader reader = new InputStreamReader(inputStream);
             iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
+            if (iResource instanceof OperationOutcome) {
+                processOperationOutcome((OperationOutcome) iResource);
+            }
+            if (responseCode.equals("200") && responseCode.equals("201")) {
+                log.error("Unexpected Error on "+exchange.getIn().getHeader(Exchange.HTTP_PATH).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_QUERY).toString());
+            }
+        } catch (InvalidRequestException ex) {
+            throw ex;
+        }
+        catch(Exception ex) {
+            log.error("Http Call failed " +ex.getClass().getSimpleName() + " " + ex.getMessage());
+            throw new InternalErrorException(ex.getClass().getSimpleName() + " " + ex.getMessage());
         }
         return iResource;
     }
