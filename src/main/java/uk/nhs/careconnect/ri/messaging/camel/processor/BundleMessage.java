@@ -2,6 +2,7 @@ package uk.nhs.careconnect.ri.messaging.camel.processor;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.Processor;
@@ -9,6 +10,7 @@ import org.hl7.fhir.dstu3.model.Bundle;
 import org.hl7.fhir.dstu3.model.DocumentReference;
 import org.hl7.fhir.dstu3.model.OperationOutcome;
 import org.hl7.fhir.dstu3.model.Resource;
+import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeFactory;
@@ -51,11 +53,21 @@ public class BundleMessage implements Processor {
         String bundleString = exchange.getIn().getBody().toString();
 
         IParser parser = ctx.newXmlParser();
+        IBaseResource iresource = null;
         try {
-            bundle = parser.parseResource(Bundle.class, bundleString);
+            iresource = parser.parseResource(bundleString);
         } catch (Exception ex) {
             log.info("Failed to parse: "+bundleString);
             throw ex;
+        }
+        if (iresource instanceof Bundle) {
+            bundle = (Bundle) iresource;
+        } else if (iresource instanceof OperationOutcome) {
+            log.error("Server Returned: " + ctx.newJsonParser().encodeResourceToString(iresource));
+            OperationOutcomeFactory.convertToException((OperationOutcome) iresource);
+        } else {
+            throw new UnprocessableEntityException(bundleString);
+
         }
         BundleCore bundleCore = new BundleCore(ctx,context,bundle, hapiBase, edmsBase);
         try {

@@ -90,6 +90,11 @@ public class BundleResourceProvider implements IResourceProvider {
             InputStream inputStream = null;
             String newXmlResource = ctx.newXmlParser().encodeResourceToString(bundle);
 
+            if (bundle.hasMeta() && bundle.getMeta().hasProfile("https://fhir.nhs.uk/STU3/StructureDefinition/ITK-Message-Bundle-1")) {
+                throw new InternalErrorException("This server does not know how to process transfer of care message Bundle."
+                        +" Please remove the transport layer and submit the payload only");
+            }
+
             switch (bundle.getType()) {
 
 
@@ -152,6 +157,11 @@ public class BundleResourceProvider implements IResourceProvider {
         try {
             InputStream inputStream = null;
             String newXmlResource = ctx.newXmlParser().encodeResourceToString(bundle);
+
+            if (bundle.hasMeta() && bundle.getMeta().hasProfile("https://fhir.nhs.uk/STU3/StructureDefinition/ITK-Message-Bundle-1")) {
+                throw new InternalErrorException("This server does not know how to process transfer of care message Bundle."
+                        +" Please remove the transport layer and submit the payload only");
+            }
 
             switch (bundle.getType()) {
                 case COLLECTION:

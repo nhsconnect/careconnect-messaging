@@ -41,6 +41,8 @@ public class BundleCore {
 
     private String edmsBase;
 
+    private ProducerTemplate template = null;
+
 /*
     private FHIRMedicationStatementToFHIRMedicationRequestTransformer
             fhirMedicationStatementToFHIRMedicationRequestTransformer = new  FHIRMedicationStatementToFHIRMedicationRequestTransformer();
@@ -89,6 +91,8 @@ public class BundleCore {
         return updatedBundle;
     }
 
+
+
     public Bundle getBundle() {
         return bundle;
     }
@@ -129,6 +133,9 @@ public class BundleCore {
     }
 
     public Resource searchAddResource(String referenceId) {
+        if (this.template == null) {
+            this.template = context.createProducerTemplate();
+        }
         try {
             log.debug("searchAddResource " + referenceId);
             if (referenceId == null) {
@@ -215,7 +222,7 @@ public class BundleCore {
                                 case "CarePlan":
                                     resource = searchAddCarePlan(referenceId, (CarePlan) iResource);
                                     break;
-                                case "CareTeam":
+                              /*  case "CareTeam":
                                     resource = searchAddCareTeam(referenceId, (CareTeam) iResource);
                                     break;
                                 case "ClinicalImpression":
@@ -223,7 +230,7 @@ public class BundleCore {
                                     break;
                                 case "Consent":
                                     resource = searchAddConsent(referenceId, (Consent) iResource);
-                                    break;
+                                    break; */
                                 case "DocumentReference":
                                     resource = searchAddDocumentReference(referenceId, (DocumentReference) iResource);
                                     break;
@@ -254,15 +261,15 @@ public class BundleCore {
                                 case "Questionnaire":
                                     resource = searchAddQuestionnaire(referenceId, (Questionnaire) iResource);
                                     break;
-                                case "RelatedPerson":
+                              /*  case "RelatedPerson":
                                     resource = searchAddRelatedPerson(referenceId, (RelatedPerson) iResource);
-                                    break;
+                                    break; */
                                 case "ReferralRequest":
                                     resource = searchAddReferralRequest(referenceId, (ReferralRequest) iResource);
                                     break;
-                                case "RiskAssessment":
+                              /*  case "RiskAssessment":
                                     resource = searchAddRiskAssessment(referenceId, (RiskAssessment) iResource);
-                                    break;
+                                    break; */
                                 case "Medication":
                                     resource = searchAddMedication(referenceId, (Medication) iResource);
                                     break;
@@ -308,6 +315,79 @@ public class BundleCore {
         //return null;
     }
 
+    public IBaseResource getResource(Exchange exchange)
+    {
+        InputStream inputStream = (InputStream) exchange.getIn().getBody();
+        String responseCode = exchange.getIn().getHeader(Exchange.HTTP_RESPONSE_CODE).toString();
+
+        Reader reader = new InputStreamReader(inputStream);
+        IBaseResource iresource = null;
+        try {
+            iresource = ctx.newJsonParser().parseResource(reader);
+        } catch (Exception ex) {
+            log.error("Resonse Code = " + responseCode + " (" +ex.getMessage() + ")");
+            switch (responseCode) {
+                case "404":
+                    throw new ResourceNotFoundException(exchange.getIn().getHeader(Exchange.HTTP_METHOD).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_PATH).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_QUERY).toString());
+
+                    default:
+                        throw new InternalErrorException(ex.getMessage());
+            }
+        }
+        if (iresource instanceof OperationOutcome) {
+            processOperationOutcome((OperationOutcome) iresource);
+        }
+        if (responseCode.equals("200") && responseCode.equals("201")) {
+            log.error("Unexpected Error on "+exchange.getIn().getHeader(Exchange.HTTP_PATH).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_QUERY).toString());
+        }
+        return iresource;
+    }
+
+    public IBaseResource queryResource(Identifier identifier, String xhttpPath) {
+        Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
+            public void process(Exchange exchange) throws Exception {
+                exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
+                exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
+                exchange.getIn().setHeader(Exchange.HTTP_PATH, xhttpPath);
+            }
+        });
+        IBaseResource iresource = getResource(exchange);
+        
+        return iresource;
+    }
+    
+    
+    public IBaseResource sendResource( String xhttpMethod, String xhttpPath, Object httpBody)
+    {
+        String httpMethod= xhttpMethod;
+        String httpPath = xhttpPath;
+        IBaseResource iResource = null;
+        try {
+            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
+                public void process(Exchange exchange) throws Exception {
+                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
+                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
+                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
+                    exchange.getIn().setHeader("Prefer","return=representation");
+                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
+                    exchange.getIn().setBody(httpBody);
+                }
+            });
+            if (exchange.getIn().getBody() instanceof String ) {
+                log.error((String) exchange.getIn().getBody());
+                throw new InternalErrorException((String) exchange.getIn().getBody());
+            }
+            InputStream inputStream = (InputStream) exchange.getIn().getBody();
+
+            Reader reader = new InputStreamReader(inputStream);
+            iResource = ctx.newJsonParser().parseResource(reader);
+        } catch(Exception ex) {
+            log.error("JSON Parse failed " + ex.getMessage());
+            throw new InternalErrorException(ex.getMessage());
+        }
+        return iResource;
+    }
+
     private ListResource searchAddList(String listId, ListResource list) {
         log.debug("List searchAdd " +listId);
 
@@ -324,31 +404,11 @@ public class BundleCore {
                     .setSystem("urn:uuid")
                     .setValue(list.getId());
         }
-
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
+        
 
         for (Identifier identifier : list.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "List");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"List");
+               
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -392,31 +452,9 @@ public class BundleCore {
             list.setId(eprListResource.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(list);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            if (exchange.getIn().getBody() instanceof String ) {
-                log.error((String) exchange.getIn().getBody());
-                throw new InternalErrorException((String) exchange.getIn().getBody());
-            }
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof ListResource) {
             eprListResource = (ListResource) iResource;
             setResourceMap(listId,eprListResource);
@@ -444,9 +482,6 @@ public class BundleCore {
         // Practitioner already processed, quit with Practitioner
         if (eprPractitioner != null) return eprPractitioner;
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         // Prevent re-adding the same Practitioner
         if (practitioner.getIdentifier().size() == 0) {
@@ -456,25 +491,9 @@ public class BundleCore {
         }
 
         for (Identifier identifier : practitioner.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Practitioner");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else if (iresource instanceof Bundle) {
+            IBaseResource iresource = queryResource(identifier,"Practitioner");
+               
+            if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size() > 0) {
                     eprPractitioner = (Practitioner) returnedBundle.getEntry().get(0).getResource();
@@ -494,25 +513,9 @@ public class BundleCore {
 
         IBaseResource iResource = null;
         String jsonResource = ctx.newJsonParser().encodeResourceToString(practitioner);
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "POST");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Practitioner");
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(jsonResource);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource("POST","Practitioner",jsonResource);
+
         if (iResource instanceof Practitioner) {
             eprPractitioner = (Practitioner) iResource;
             setResourceMap(practitionerId,eprPractitioner);
@@ -537,9 +540,6 @@ public class BundleCore {
         // Organization already processed, quit with Organization
         if (eprOrganization != null) return eprOrganization;
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         // Prevent re-adding the same Organisation
         if (organisation.getIdentifier().size() == 0) {
@@ -549,25 +549,9 @@ public class BundleCore {
         }
 
         for (Identifier identifier : organisation.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Organization");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else if (iresource instanceof Bundle) {
+            IBaseResource iresource = queryResource(identifier,"Organization");
+                
+            if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
                     eprOrganization = (Organization) returnedBundle.getEntry().get(0).getResource();
@@ -593,34 +577,9 @@ public class BundleCore {
 
         IBaseResource iResource = null;
         String jsonResource = ctx.newJsonParser().encodeResourceToString(organisation);
-        Exchange exchange = null;
-        try {
-            exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "POST");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Organization");
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(jsonResource);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            if (exchange !=null) {
-                try {
-                    String string = (String) exchange.getIn().getBody();
-                    log.error("JSON Parse part 1 = "+string);
-                } catch (Exception ex1) {
+        iResource = sendResource("POST","Organization",jsonResource);
 
-                }
-            }
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
         if (iResource instanceof Organization) {
             eprOrganization = (Organization) iResource;
             setResourceMap(organisationId,eprOrganization);
@@ -645,9 +604,7 @@ public class BundleCore {
         // HealthcareService already processed, quit with HealthcareService
         if (eprService != null) return eprService;
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         // Prevent re-adding the same HealthcareService
         if (service.getIdentifier().size() == 0) {
@@ -658,25 +615,9 @@ public class BundleCore {
 
         log.debug("Looking up HealthcareService Service " +serviceId);
         for (Identifier identifier : service.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "HealthcareService");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else  {
+            IBaseResource iresource = queryResource(identifier,"HealthcareService");
+                
+            if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
                     eprService = (HealthcareService) returnedBundle.getEntry().get(0).getResource();
@@ -716,34 +657,8 @@ public class BundleCore {
 
         IBaseResource iResource = null;
         String jsonResource = ctx.newJsonParser().encodeResourceToString(service);
-        Exchange exchange = null;
-        try {
-            exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "POST");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "HealthcareService");
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(jsonResource);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
+        iResource = sendResource("POST","HealthcareService",jsonResource);
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            if (exchange !=null) {
-                try {
-                    String string = (String) exchange.getIn().getBody();
-                    log.error("JSON Parse part 1 = "+string);
-                } catch (Exception ex1) {
-
-                }
-            }
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
         if (iResource instanceof HealthcareService) {
             eprService = (HealthcareService) iResource;
             setResourceMap(serviceId,eprService);
@@ -776,30 +691,10 @@ public class BundleCore {
                     .setValue(location.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : location.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Location");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else if (iresource instanceof Bundle) {
+            IBaseResource iresource = queryResource(identifier, "Location");
+              if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
                     eprLocation = (Location) returnedBundle.getEntry().get(0).getResource();
@@ -832,30 +727,9 @@ public class BundleCore {
             location.setId(eprLocation.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(location);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            // Location found do not add
 
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
         if (iResource instanceof Location) {
             eprLocation = (Location) iResource;
             setResourceMap(locationId,eprLocation);
@@ -886,30 +760,11 @@ public class BundleCore {
                     .setValue(allergyIntolerance.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         for (Identifier identifier : allergyIntolerance.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "AllergyIntolerance");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier, "AllergyIntolerance");
+              
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -947,27 +802,9 @@ public class BundleCore {
             allergyIntolerance.setId(eprAllergyIntolerance.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(allergyIntolerance);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof AllergyIntolerance) {
             eprAllergyIntolerance = (AllergyIntolerance) iResource;
             setResourceMap(allergyIntoleranceId,eprAllergyIntolerance);
@@ -999,30 +836,10 @@ public class BundleCore {
                     .setValue(carePlan.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : carePlan.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "CarePlan");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier, "CarePlan");
+            
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -1087,27 +904,9 @@ public class BundleCore {
             carePlan.setId(eprCarePlan.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(carePlan);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof CarePlan) {
             eprCarePlan = (CarePlan) iResource;
             setResourceMap(carePlanId,eprCarePlan);
@@ -1139,30 +938,10 @@ public class BundleCore {
                     .setValue(careTeam.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : careTeam.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "CareTeam");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"CareTeam");
+            
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -1222,27 +1001,9 @@ public class BundleCore {
             careTeam.setId(eprCareTeam.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(careTeam);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof CareTeam) {
             eprCareTeam = (CareTeam) iResource;
             setResourceMap(careTeamId,eprCareTeam);
@@ -1275,30 +1036,11 @@ public class BundleCore {
                     .setValue(form.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         Identifier identifier = form.getIdentifier();
-        Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-            public void process(Exchange exchange) throws Exception {
-                exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                exchange.getIn().setHeader(Exchange.HTTP_PATH, "QuestionnaireResponse");
-            }
-        });
-        inputStream = (InputStream) exchange.getIn().getBody();
-        Reader reader = new InputStreamReader(inputStream);
-        IBaseResource iresource = null;
-        try {
-            iresource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
-        if (iresource instanceof OperationOutcome) {
-            processOperationOutcome((OperationOutcome) iresource);
-        } else
+        
+        IBaseResource iresource = queryResource(identifier,"QuestionnaireResponse");
+        
         if (iresource instanceof Bundle) {
             Bundle returnedBundle = (Bundle) iresource;
             if (returnedBundle.getEntry().size()>0) {
@@ -1355,27 +1097,9 @@ public class BundleCore {
             form.setId(eprQuestionnaireResponse.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(form);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof QuestionnaireResponse) {
             eprQuestionnaireResponse = (QuestionnaireResponse) iResource;
             setResourceMap(formId,eprQuestionnaireResponse);
@@ -1429,30 +1153,13 @@ public class BundleCore {
                     .setValue(observation.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
+      
 
-        InputStream inputStream = null;
+      
 
         for (Identifier identifier : observation.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Observation");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"Observation");
+            
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -1505,27 +1212,9 @@ public class BundleCore {
             observation.setId(eprObservation.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(observation);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Observation) {
             eprObservation = (Observation) iResource;
             setResourceMap(observationId,eprObservation);
@@ -1560,30 +1249,14 @@ public class BundleCore {
                     .setValue(diagnosticReport.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         for (Identifier identifier : diagnosticReport.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "DiagnosticReport");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            }  else {
+            
+            IBaseResource iresource = queryResource(identifier,"DiagnosticReport");
+            
+            if (iresource instanceof Bundle) {
+                
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
                     eprDiagnosticReport = (DiagnosticReport) returnedBundle.getEntry().get(0).getResource();
@@ -1637,27 +1310,9 @@ public class BundleCore {
             diagnosticReport.setId(eprDiagnosticReport.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(diagnosticReport);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof DiagnosticReport) {
             eprDiagnosticReport = (DiagnosticReport) iResource;
             setResourceMap(diagnosticReportId,eprDiagnosticReport);
@@ -1692,30 +1347,11 @@ public class BundleCore {
                     .setValue(immunisation.getDate().toString()+"-"+immunisation.getVaccineCode().getCodingFirstRep().getCode());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : immunisation.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Immunization");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            
+            IBaseResource iresource = queryResource(identifier,"Immunization");
+            
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -1759,27 +1395,9 @@ public class BundleCore {
             immunisation.setId(eprImmunization.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(immunisation);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Immunization) {
             eprImmunization = (Immunization) iResource;
             setResourceMap(immunisationId,eprImmunization);
@@ -1813,30 +1431,11 @@ public class BundleCore {
                     .setValue(medicationRequest.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
-        for (Identifier identifier : medicationRequest.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "MedicationRequest");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+         for (Identifier identifier : medicationRequest.getIdentifier()) {
+            IBaseResource iresource = queryResource(identifier,"MedicationRequest");
+               
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -1893,27 +1492,9 @@ public class BundleCore {
             medicationRequest.setId(eprMedicationRequest.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(medicationRequest);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+         iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof MedicationRequest) {
             eprMedicationRequest = (MedicationRequest) iResource;
             setResourceMap(medicationRequestId,eprMedicationRequest);
@@ -1938,8 +1519,6 @@ public class BundleCore {
         // Organization already processed, quit with Organization
         if (eprMedication != null) return eprMedication;
 
-
-        ProducerTemplate template = context.createProducerTemplate();
 
         InputStream inputStream = null;
 
@@ -1992,27 +1571,9 @@ public class BundleCore {
             Medication.setId(eprMedication.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(Medication);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof org.hl7.fhir.dstu3.model.Medication) {
             eprMedication = (org.hl7.fhir.dstu3.model.Medication) iResource;
             setResourceMap(medicationId,eprMedication);
@@ -2046,31 +1607,11 @@ public class BundleCore {
                     .setValue(riskAssessment.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         if (riskAssessment.hasIdentifier()) {
             Identifier identifier = riskAssessment.getIdentifier();
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "RiskAssessment");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"RiskAssessment");
+              
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -2114,27 +1655,9 @@ public class BundleCore {
             riskAssessment.setId(eprRiskAssessment.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(riskAssessment);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof RiskAssessment) {
             eprRiskAssessment = (RiskAssessment) iResource;
             setResourceMap(riskAssessmentId,eprRiskAssessment);
@@ -2167,30 +1690,10 @@ public class BundleCore {
                     .setValue(impression.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : impression.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "ClinicalImpression");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"ClinicalImpression");
+               
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -2235,27 +1738,9 @@ public class BundleCore {
             impression.setId(eprClinicalImpression.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(impression);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof ClinicalImpression) {
             eprClinicalImpression = (ClinicalImpression) iResource;
             setResourceMap(impressionId,eprClinicalImpression);
@@ -2287,31 +1772,12 @@ public class BundleCore {
                     .setValue(consent.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         if (consent.hasIdentifier()) {
             Identifier identifier = consent.getIdentifier();
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Consent");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"Consent");
+                
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -2375,27 +1841,9 @@ public class BundleCore {
             consent.setId(eprConsent.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(consent);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Consent) {
             eprConsent = (Consent) iResource;
             setResourceMap(consentId,eprConsent);
@@ -2427,30 +1875,11 @@ public class BundleCore {
                     .setValue(flag.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         for (Identifier identifier : flag.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Flag");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier, "Flag");
+                
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -2490,27 +1919,9 @@ public class BundleCore {
             flag.setId(eprFlag.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(flag);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Flag) {
             eprFlag = (Flag) iResource;
             setResourceMap(flagId,eprFlag);
@@ -2543,30 +1954,10 @@ public class BundleCore {
                     .setValue(goal.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : goal.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Goal");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"Goal");
+               
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -2601,27 +1992,9 @@ public class BundleCore {
             goal.setId(eprGoal.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(goal);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Goal) {
             eprGoal = (Goal) iResource;
             setResourceMap(goalId,eprGoal);
@@ -2654,30 +2027,11 @@ public class BundleCore {
                     .setValue(medicationDispense.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         for (Identifier identifier : medicationDispense.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "MedicationDispense");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"MedicationDispense");
+           
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -2761,27 +2115,9 @@ public class BundleCore {
             medicationDispense.setId(eprMedicationDispense.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(medicationDispense);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof MedicationDispense) {
             eprMedicationDispense = (MedicationDispense) iResource;
             setResourceMap(medicationDispenseId,eprMedicationDispense);
@@ -2813,30 +2149,11 @@ public class BundleCore {
                     .setValue(medicationAdministration.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         for (Identifier identifier : medicationAdministration.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "MedicationAdministration");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"MedicationAdministration");
+            
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -2908,27 +2225,9 @@ public class BundleCore {
             medicationAdministration.setId(eprMedicationAdministration.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(medicationAdministration);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof MedicationAdministration) {
             eprMedicationAdministration = (MedicationAdministration) iResource;
             setResourceMap(medicationAdministrationId,eprMedicationAdministration);
@@ -2961,30 +2260,11 @@ public class BundleCore {
                     .setValue(medicationStatement.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
 
-        InputStream inputStream = null;
 
         for (Identifier identifier : medicationStatement.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "MedicationStatement");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier, "MedicationStatement");
+               
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -3077,27 +2357,9 @@ public class BundleCore {
             medicationStatement.setId(eprMedicationStatement.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(medicationStatement);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof MedicationStatement) {
             eprMedicationStatement = (MedicationStatement) iResource;
             setResourceMap(medicationStatementId,eprMedicationStatement);
@@ -3131,30 +2393,10 @@ public class BundleCore {
                     .setValue(condition.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : condition.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Condition");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"Condition");
+         
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -3196,27 +2438,9 @@ public class BundleCore {
             condition.setId(eprCondition.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(condition);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Condition) {
             eprCondition = (Condition) iResource;
             setResourceMap(conditionId,eprCondition);
@@ -3429,35 +2653,16 @@ public class BundleCore {
         }
 
 
-        ProducerTemplate template = context.createProducerTemplate();
+        for (Identifier identifier : documentReference.getIdentifier()) {
 
-        InputStream inputStream = null;
-
-        String identifierUrl = "identifier=" + documentReference.getIdentifierFirstRep().getSystem() + "|" + documentReference.getIdentifierFirstRep().getValue();
-        Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-            public void process(Exchange exchange) throws Exception {
-                exchange.getIn().setHeader(Exchange.HTTP_QUERY, identifierUrl);
-                exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                exchange.getIn().setHeader(Exchange.HTTP_PATH, "DocumentReference");
-            }
-        });
-        inputStream = (InputStream) exchange.getIn().getBody();
-        Reader reader = new InputStreamReader(inputStream);
-        IBaseResource iresource = null;
-        try {
-            iresource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
-        if (iresource instanceof OperationOutcome) {
-            processOperationOutcome((OperationOutcome) iresource);
-        } else
-        if (iresource instanceof Bundle) {
-            Bundle returnedBundle = (Bundle) iresource;
-            if (returnedBundle.getEntry().size()>0) {
-                eprDocumentReference = (DocumentReference) returnedBundle.getEntry().get(0).getResource();
-                log.debug("Found DocumentReference = " + eprDocumentReference.getId());
+            IBaseResource iresource = queryResource(identifier,"DocumentReference");
+            
+            if (iresource instanceof Bundle) {
+                Bundle returnedBundle = (Bundle) iresource;
+                if (returnedBundle.getEntry().size()>0) {
+                    eprDocumentReference = (DocumentReference) returnedBundle.getEntry().get(0).getResource();
+                    log.debug("Found DocumentReference = " + eprDocumentReference.getId());
+                }
             }
         }
 
@@ -3517,27 +2722,9 @@ public class BundleCore {
             documentReference.setId(eprDocumentReference.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(documentReference);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof DocumentReference) {
             eprDocumentReference = (DocumentReference) iResource;
 
@@ -3571,30 +2758,10 @@ public class BundleCore {
                     .setValue(procedure.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : procedure.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Procedure");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"Procedure");
+           
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -3648,27 +2815,9 @@ public class BundleCore {
             procedure.setId(eprProcedure.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(procedure);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Procedure) {
             eprProcedure = (Procedure) iResource;
             setResourceMap(eprProcedure.getId(),eprProcedure);
@@ -3701,30 +2850,10 @@ public class BundleCore {
                     .setValue(referralRequest.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : referralRequest.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "ReferralRequest");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier, "ReferralRequest");
+            
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -3800,27 +2929,9 @@ public class BundleCore {
             referralRequest.setId(eprReferralRequest.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(referralRequest);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof ReferralRequest) {
             eprReferralRequest = (ReferralRequest) iResource;
             setResourceMap(eprReferralRequest.getId(),eprReferralRequest);
@@ -3856,33 +2967,10 @@ public class BundleCore {
                     .setValue(encounter.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : encounter.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Encounter");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"Encounter");
+            
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -4000,27 +3088,9 @@ public class BundleCore {
             encounter.setId(eprEncounter.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(encounter);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof Encounter) {
             eprEncounter = (Encounter) iResource;
             setResourceMap(eprEncounter.getId(),eprEncounter);
@@ -4052,33 +3122,10 @@ public class BundleCore {
                     .setValue(episodeOfCare.getId());
         }
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : episodeOfCare.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "EpisodeOfCare");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else
+            IBaseResource iresource = queryResource(identifier,"EpisodeOfCare");
+              
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size()>0) {
@@ -4140,27 +3187,9 @@ public class BundleCore {
             episodeOfCare.setId(eprEpisodeOfCare.getId());
         }
         String httpBody = ctx.newJsonParser().encodeResourceToString(episodeOfCare);
-        String httpMethod= xhttpMethod;
-        String httpPath = xhttpPath;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch(Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource( xhttpMethod,xhttpPath,httpBody);
+
         if (iResource instanceof EpisodeOfCare) {
             eprEpisodeOfCare = (EpisodeOfCare) iResource;
             setResourceMap(eprEpisodeOfCare.getId(),eprEpisodeOfCare);
@@ -4178,7 +3207,7 @@ public class BundleCore {
 
     public Patient searchAddPatient(String patientId, Patient patient) {
 
-            log.debug("Patient searchAdd " + patientId);
+            log.info("Patient searchAdd " + patientId);
 
             if (patient == null) throw new InternalErrorException("Bundle processing error");
 
@@ -4187,30 +3216,11 @@ public class BundleCore {
             // Patient already processed, quit with Patient
             if (eprPatient != null) return eprPatient;
 
-            ProducerTemplate template = context.createProducerTemplate();
-
-            InputStream inputStream = null;
 
             for (Identifier identifier : patient.getIdentifier()) {
-                Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                    public void process(Exchange exchange) throws Exception {
-                        exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                        exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                        exchange.getIn().setHeader(Exchange.HTTP_PATH, "Patient");
-                    }
-                });
-                inputStream = (InputStream) exchange.getIn().getBody();
-                Reader reader = new InputStreamReader(inputStream);
-                IBaseResource iresource = null;
-                try {
-                    iresource = ctx.newJsonParser().parseResource(reader);
-                } catch (Exception ex) {
-                    log.error("JSON Parse failed " + ex.getMessage());
-                    throw new InternalErrorException(ex.getMessage());
-                }
-                if (iresource instanceof OperationOutcome) {
-                    processOperationOutcome((OperationOutcome) iresource);
-                } else
+                
+                IBaseResource iresource = queryResource( identifier, "Patient");
+
                 if (iresource instanceof Bundle) {
                     Bundle returnedBundle = (Bundle) iresource;
                     if (returnedBundle.getEntry().size() > 0) {
@@ -4247,25 +3257,9 @@ public class BundleCore {
 
             IBaseResource iResource = null;
             String jsonResource = ctx.newJsonParser().encodeResourceToString(patient);
-            try {
-                Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                    public void process(Exchange exchange) throws Exception {
-                        exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                        exchange.getIn().setHeader(Exchange.HTTP_METHOD, "POST");
-                        exchange.getIn().setHeader(Exchange.HTTP_PATH, "Patient");
-                        exchange.getIn().setHeader("Prefer", "return=representation");
-                        exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                        exchange.getIn().setBody(jsonResource);
-                    }
-                });
-                inputStream = (InputStream) exchange.getIn().getBody();
 
-                Reader reader = new InputStreamReader(inputStream);
-                iResource = ctx.newJsonParser().parseResource(reader);
-            } catch (Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
+            iResource = sendResource("POST","Patient",jsonResource);
+
             if (iResource instanceof Patient) {
                 eprPatient = (Patient) iResource;
                 setResourceMap(patientId, eprPatient);
@@ -4289,30 +3283,11 @@ public class BundleCore {
         // Questionnaire already processed, quit with Questionnaire
         if (eprQuestionnaire != null) return eprQuestionnaire;
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : form.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Questionnaire");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch (Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else if (iresource instanceof Bundle) {
+            IBaseResource iresource = queryResource( identifier, "Questionnaire");
+            
+            if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size() > 0) {
                     eprQuestionnaire = (Questionnaire) returnedBundle.getEntry().get(0).getResource();
@@ -4331,25 +3306,9 @@ public class BundleCore {
 
         IBaseResource iResource = null;
         String jsonResource = ctx.newJsonParser().encodeResourceToString(form);
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "POST");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Questionnaire");
-                    exchange.getIn().setHeader("Prefer", "return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(jsonResource);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch (Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource("POST","Questionnaire",jsonResource);
+
         if (iResource instanceof Questionnaire) {
             eprQuestionnaire = (Questionnaire) iResource;
             setResourceMap(formId, eprQuestionnaire);
@@ -4373,30 +3332,10 @@ public class BundleCore {
         // RelatedPerson already processed, quit with RelatedPerson
         if (eprRelatedPerson != null) return eprRelatedPerson;
 
-        ProducerTemplate template = context.createProducerTemplate();
-
-        InputStream inputStream = null;
 
         for (Identifier identifier : person.getIdentifier()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "RelatedPerson");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch (Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
-            if (iresource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iresource);
-            } else if (iresource instanceof Bundle) {
+            IBaseResource iresource = queryResource(identifier,"RelatedPerson");
+             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
                 if (returnedBundle.getEntry().size() > 0) {
                     eprRelatedPerson = (RelatedPerson) returnedBundle.getEntry().get(0).getResource();
@@ -4421,25 +3360,9 @@ public class BundleCore {
 
         IBaseResource iResource = null;
         String jsonResource = ctx.newJsonParser().encodeResourceToString(person);
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "POST");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "RelatedPerson");
-                    exchange.getIn().setHeader("Prefer", "return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(jsonResource);
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
-            iResource = ctx.newJsonParser().parseResource(reader);
-        } catch (Exception ex) {
-            log.error("JSON Parse failed " + ex.getMessage());
-            throw new InternalErrorException(ex.getMessage());
-        }
+        iResource = sendResource("POST","RelatedPerson",jsonResource);
+
         if (iResource instanceof RelatedPerson) {
             eprRelatedPerson = (RelatedPerson) iResource;
             setResourceMap(personId, eprRelatedPerson);
