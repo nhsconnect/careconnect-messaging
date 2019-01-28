@@ -46,7 +46,7 @@ public class ConformanceProvider extends ServerCapabilityStatementProvider {
     	
     	WebApplicationContext ctx = WebApplicationContextUtils.getWebApplicationContext(theRequest.getServletContext());
     	log.info("restful2 Server not null = " + ctx.getEnvironment().getProperty("ccri.validate_flag"));
-    	
+    	 
         String CRUD_update =  ctx.getEnvironment().getProperty("ccri.CRUD_update");
         String CRUD_delete = ctx.getEnvironment().getProperty("ccri.CRUD_delete");
         String CRUD_create = ctx.getEnvironment().getProperty("ccri.CRUD_create");
