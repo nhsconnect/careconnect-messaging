@@ -38,7 +38,7 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 
 	private static final long serialVersionUID = 1L;
 	private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CcriMessagingHAPIConfig.class);
-
+	
 	private ApplicationContext applicationContext;
 
 	CcriMessagingHAPIConfig(ApplicationContext context) {
@@ -129,6 +129,9 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 		setServerName(softwareName);
 		setServerVersion(softwareVersion);
 		setImplementationDescription(server);
+		
+		ServerInterceptor loggingInterceptor = new ServerInterceptor(log);
+        registerInterceptor(loggingInterceptor);
 
 
 		CorsConfiguration config = new CorsConfiguration();
