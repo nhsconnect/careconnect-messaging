@@ -129,9 +129,6 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 		setServerName(softwareName);
 		setServerVersion(softwareVersion);
 		setImplementationDescription(server);
-		
-		ServerInterceptor loggingInterceptor = new ServerInterceptor(log);
-        registerInterceptor(loggingInterceptor);
 
 
 		CorsConfiguration config = new CorsConfiguration();
@@ -151,8 +148,11 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 		CorsInterceptor interceptor = new CorsInterceptor(config);
 		registerInterceptor(interceptor);
 
-		ServerInterceptor gatewayInterceptor = new ServerInterceptor(log);
-		registerInterceptor(gatewayInterceptor);
+		ServerInterceptor loggingInterceptor = new ServerInterceptor(log);
+		registerInterceptor(loggingInterceptor);
+
+		//ServerInterceptor gatewayInterceptor = new ServerInterceptor(log);
+		//registerInterceptor(gatewayInterceptor);
 
 		FifoMemoryPagingProvider pp = new FifoMemoryPagingProvider(10);
 		pp.setDefaultPageSize(10);
