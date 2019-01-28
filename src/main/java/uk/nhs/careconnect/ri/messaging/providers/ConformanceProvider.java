@@ -9,6 +9,8 @@ import ca.uhn.fhir.rest.server.RestulfulServerConfiguration;
 import org.hl7.fhir.dstu3.hapi.rest.server.ServerCapabilityStatementProvider;
 import org.hl7.fhir.dstu3.model.*;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.support.WebApplicationContextUtils;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.Date;
@@ -41,6 +43,21 @@ public class ConformanceProvider extends ServerCapabilityStatementProvider {
     @Override
     @Metadata
     public CapabilityStatement getServerConformance(HttpServletRequest theRequest) {
+    	
+    	WebApplicationContext ctx = WebApplicationContextUtils.getWebApplicationContext(theRequest.getServletContext());
+    	log.info("restful2 Server not null = " + ctx.getEnvironment().getProperty("ccri.validate_flag"));
+    	 
+        String CRUD_update =  ctx.getEnvironment().getProperty("ccri.CRUD_update");
+        String CRUD_delete = ctx.getEnvironment().getProperty("ccri.CRUD_delete");
+        String CRUD_create = ctx.getEnvironment().getProperty("ccri.CRUD_create");
+        String CRUD_read = ctx.getEnvironment().getProperty("ccri.CRUD_read");
+
+
+        String oauth2authorize = ctx.getEnvironment().getProperty("ccri.oauth2.authorize");
+        String oauth2token = ctx.getEnvironment().getProperty("ccri.oauth2.token");
+        String oauth2register = ctx.getEnvironment().getProperty("ccri.oauth2.register");
+        String oauth2 = ctx.getEnvironment().getProperty("ccri.oauth2");
+        
         if (capabilityStatement != null && myCache) {
             return capabilityStatement;
         }
@@ -78,6 +95,35 @@ public class ConformanceProvider extends ServerCapabilityStatementProvider {
             log.trace("restful Server not null");
             for (CapabilityStatement.CapabilityStatementRestComponent nextRest : capabilityStatement.getRest()) {
                 for (CapabilityStatement.CapabilityStatementRestResourceComponent restResourceComponent : nextRest.getResource()) {
+                	
+                	// Start of CRUD operations
+               	 List<ResourceInteractionComponent> l = restResourceComponent.getInteraction();
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_read.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="READ")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_update.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="UPDATE")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_create.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="CREATE")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_delete.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="DELETE")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    // End of CRUD operations
+                    
                     log.trace("restResourceComponent.getType - " + restResourceComponent.getType());
                    for (IResourceProvider provider : restfulServer.getResourceProviders()) {
 
