@@ -95,6 +95,35 @@ public class ConformanceProvider extends ServerCapabilityStatementProvider {
             log.trace("restful Server not null");
             for (CapabilityStatement.CapabilityStatementRestComponent nextRest : capabilityStatement.getRest()) {
                 for (CapabilityStatement.CapabilityStatementRestResourceComponent restResourceComponent : nextRest.getResource()) {
+                	
+                	// Start of CRUD operations
+               	 List<ResourceInteractionComponent> l = restResourceComponent.getInteraction();
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_read.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="READ")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_update.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="UPDATE")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_create.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="CREATE")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    for(int i=0;i<l.size();i++)
+                    	if(CRUD_delete.equals("false"))
+                    	if (restResourceComponent.getInteraction().get(i).getCode().toString()=="DELETE")
+                    	{
+                    		restResourceComponent.getInteraction().remove(i);
+                    	}	
+                    // End of CRUD operations
+                    
                     log.trace("restResourceComponent.getType - " + restResourceComponent.getType());
                    for (IResourceProvider provider : restfulServer.getResourceProviders()) {
 
