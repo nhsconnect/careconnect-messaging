@@ -13,6 +13,7 @@ import org.hl7.fhir.dstu3.model.Resource;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeException;
 import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeFactory;
 
 import java.util.HashMap;
@@ -103,7 +104,13 @@ public class BundleMessage implements Processor {
             exchange.getIn().setBody(ctx.newXmlParser().encodeResourceToString(bundleCore.getUpdatedBundle()));
             //log.info(ctx.newXmlParser().encodeResourceToString(bundleCore.getBundle()));
 
-        } catch (Exception ex) {
+        }
+        catch (OperationOutcomeException ex) {
+            log.error("BundleMessage Exception OperationExchange");
+            exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE,"400");
+            exchange.getIn().setBody(ctx.newXmlParser().encodeResourceToString(ex.getOutcome()));
+        }
+        catch (Exception ex) {
             // A number of the HAPI related function will return exceptions.
             // Convert to operational outcomes
             String errorMessage;
@@ -136,6 +143,7 @@ public class BundleMessage implements Processor {
     }
 
     private void setExchange(Exchange exchange, OperationOutcome operationOutcome) {
+        exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE,"400");
         exchange.getIn().setBody(ctx.newXmlParser().encodeResourceToString(operationOutcome));
     }
 

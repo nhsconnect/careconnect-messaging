@@ -12,6 +12,7 @@ import org.hl7.fhir.dstu3.model.*;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeException;
 import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeFactory;
 
 import java.io.InputStream;
@@ -73,7 +74,7 @@ public class BundleCore {
         return null;
     }
 
-    public Bundle getUpdatedBundle() {
+    public Bundle getUpdatedBundle() throws OperationOutcomeException {
         //
         Bundle updatedBundle = new Bundle();
         updatedBundle.setType(this.bundle.getType());
@@ -134,7 +135,7 @@ public class BundleCore {
         return found;
     }
 
-    public Resource searchAddResource(String referenceId) {
+    public Resource searchAddResource(String referenceId) throws OperationOutcomeException {
         if (this.template == null) {
             this.template = context.createProducerTemplate();
         }
@@ -317,11 +318,14 @@ public class BundleCore {
         //return null;
     }
 
-    public IBaseResource getResource(Exchange exchange)
+    public IBaseResource getResource(Exchange exchange) throws OperationOutcomeException
     {
         InputStream inputStream = (InputStream) exchange.getIn().getBody();
         String responseCode = exchange.getIn().getHeader(Exchange.HTTP_RESPONSE_CODE).toString();
-
+        if (exchange.getIn().getBody() instanceof String ) {
+            log.error((String) exchange.getIn().getBody());
+            throw new InternalErrorException((String) exchange.getIn().getBody());
+        }
         Reader reader = new InputStreamReader(inputStream);
         IBaseResource iresource = null;
         try {
@@ -346,7 +350,7 @@ public class BundleCore {
         return iresource;
     }
 
-    public IBaseResource queryResource(Identifier identifier, String xhttpPath) {
+    public IBaseResource queryResource(Identifier identifier, String xhttpPath) throws OperationOutcomeException {
         Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
             public void process(Exchange exchange) throws Exception {
                 exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
@@ -354,56 +358,31 @@ public class BundleCore {
                 exchange.getIn().setHeader(Exchange.HTTP_PATH, xhttpPath);
             }
         });
-        IBaseResource iresource = getResource(exchange);
-        
-        return iresource;
+        return getResource(exchange);
     }
     
     
-    public IBaseResource sendResource( String xhttpMethod, String xhttpPath, Object httpBody)
+    public IBaseResource sendResource( String xhttpMethod, String xhttpPath, Object httpBody) throws OperationOutcomeException
     {
         String httpMethod= xhttpMethod;
         String httpPath = xhttpPath;
-        IBaseResource iResource = null;
-        try {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
-                    exchange.getIn().setHeader("Prefer","return=representation");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
-                    exchange.getIn().setBody(httpBody);
-                }
-            });
-            if (exchange.getIn().getBody() instanceof String ) {
-                log.error((String) exchange.getIn().getBody());
-                throw new InternalErrorException((String) exchange.getIn().getBody());
-            }
-            String responseCode = exchange.getIn().getHeader(Exchange.HTTP_RESPONSE_CODE).toString();
-            InputStream inputStream = (InputStream) exchange.getIn().getBody();
 
-            Reader reader = new InputStreamReader(inputStream);
+        Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
+            public void process(Exchange exchange) throws Exception {
+                exchange.getIn().setHeader(Exchange.HTTP_QUERY, "");
+                exchange.getIn().setHeader(Exchange.HTTP_METHOD, httpMethod);
+                exchange.getIn().setHeader(Exchange.HTTP_PATH, httpPath);
+                exchange.getIn().setHeader("Prefer","return=representation");
+                exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/fhir+json");
+                exchange.getIn().setBody(httpBody);
+            }
+        });
+        return getResource(exchange);
 
-            iResource = ctx.newJsonParser().parseResource(reader);
-            if (iResource instanceof OperationOutcome) {
-                processOperationOutcome((OperationOutcome) iResource);
-            }
-            if (responseCode.equals("200") && responseCode.equals("201")) {
-                log.error("Unexpected Error on "+exchange.getIn().getHeader(Exchange.HTTP_PATH).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_QUERY).toString());
-            }
-        } catch (BaseServerResponseException ex) {
-            // KGM pass back HAPI Exception errors
-            throw ex;
-        }
-        catch(Exception ex) {
-            log.error("Http Call failed " +ex.getClass().getSimpleName() + " " + ex.getMessage());
-            throw new InternalErrorException(ex.getClass().getSimpleName() + " " + ex.getMessage());
-        }
-        return iResource;
+
     }
 
-    private ListResource searchAddList(String listId, ListResource list) {
+    private ListResource searchAddList(String listId, ListResource list) throws OperationOutcomeException {
         log.debug("List searchAdd " +listId);
 
         if (list == null) throw new InternalErrorException("Bundle processing error");
@@ -486,7 +465,7 @@ public class BundleCore {
 
 
 
-    public Practitioner searchAddPractitioner(String practitionerId, Practitioner practitioner) {
+    public Practitioner searchAddPractitioner(String practitionerId, Practitioner practitioner) throws OperationOutcomeException {
 
         log.debug("Practitioner searchAdd " +practitionerId);
 
@@ -545,7 +524,7 @@ public class BundleCore {
         return eprPractitioner;
     }
 
-    public Organization searchAddOrganisation(String organisationId, Organization organisation) {
+    public Organization searchAddOrganisation(String organisationId, Organization organisation) throws OperationOutcomeException {
         log.debug("Orgnisation searchAdd " +organisationId);
 
         if (organisation == null) throw new InternalErrorException("Bundle processing error");
@@ -609,7 +588,7 @@ public class BundleCore {
         return eprOrganization;
     }
 
-    public HealthcareService searchAddHealthcareService(String serviceId, HealthcareService service) {
+    public HealthcareService searchAddHealthcareService(String serviceId, HealthcareService service) throws OperationOutcomeException {
         log.debug("HealthcareService searchAdd " +serviceId);
 
         if (service== null) throw new InternalErrorException("Bundle processing error");
@@ -689,7 +668,7 @@ public class BundleCore {
         return null;
     }
 
-    public Location searchAddLocation(String locationId, Location location) {
+    public Location searchAddLocation(String locationId, Location location) throws OperationOutcomeException {
         log.debug("Location searchAdd " +locationId);
 
         if (location == null) throw new InternalErrorException("Bundle processing error");
@@ -758,7 +737,7 @@ public class BundleCore {
         return eprLocation;
     }
 
-    public AllergyIntolerance searchAddAllergyIntolerance(String allergyIntoleranceId, AllergyIntolerance allergyIntolerance) {
+    public AllergyIntolerance searchAddAllergyIntolerance(String allergyIntoleranceId, AllergyIntolerance allergyIntolerance) throws OperationOutcomeException {
         log.debug("AllergyIntolerance searchAdd " +allergyIntoleranceId);
 
         if (allergyIntolerance == null) throw new InternalErrorException("Bundle processing error");
@@ -834,7 +813,7 @@ public class BundleCore {
         return eprAllergyIntolerance;
     }
 
-    public CarePlan searchAddCarePlan(String carePlanId, CarePlan carePlan) {
+    public CarePlan searchAddCarePlan(String carePlanId, CarePlan carePlan) throws OperationOutcomeException {
         log.debug("CarePlan searchAdd " +carePlanId);
 
         if (carePlan == null) throw new InternalErrorException("Bundle processing error");
@@ -936,7 +915,7 @@ public class BundleCore {
         return eprCarePlan;
     }
 
-    public CareTeam searchAddCareTeam(String careTeamId, CareTeam careTeam) {
+    public CareTeam searchAddCareTeam(String careTeamId, CareTeam careTeam) throws OperationOutcomeException {
         log.debug("CareTeam searchAdd " +careTeamId);
 
         if (careTeam == null) throw new InternalErrorException("Bundle processing error");
@@ -1034,7 +1013,7 @@ public class BundleCore {
     }
 
 
-    public QuestionnaireResponse searchAddQuestionnaireResponse(String formId, QuestionnaireResponse form) {
+    public QuestionnaireResponse searchAddQuestionnaireResponse(String formId, QuestionnaireResponse form) throws OperationOutcomeException {
         log.debug("QuestionnaireResponse searchAdd " +formId);
 
         if (form == null) throw new InternalErrorException("Bundle processing error");
@@ -1130,7 +1109,7 @@ public class BundleCore {
     }
 
 
-    public QuestionnaireResponse questionnaireItem(QuestionnaireResponse form) {
+    public QuestionnaireResponse questionnaireItem(QuestionnaireResponse form) throws OperationOutcomeException {
         for (QuestionnaireResponse.QuestionnaireResponseItemComponent itemComponent :form.getItem()) {
             if (itemComponent.hasAnswer()) {
                 for (QuestionnaireResponse.QuestionnaireResponseItemAnswerComponent answerComponent : itemComponent.getAnswer()) {
@@ -1151,7 +1130,7 @@ public class BundleCore {
     }
 
 
-    public Observation searchAddObservation(String observationId, Observation observation) {
+    public Observation searchAddObservation(String observationId, Observation observation) throws OperationOutcomeException {
         log.debug("Observation searchAdd " +observationId);
 
         if (observation == null) throw new InternalErrorException("Bundle processing error");
@@ -1247,7 +1226,7 @@ public class BundleCore {
 
 
 
-    public DiagnosticReport searchAddDiagnosticReport(String diagnosticReportId, DiagnosticReport diagnosticReport) {
+    public DiagnosticReport searchAddDiagnosticReport(String diagnosticReportId, DiagnosticReport diagnosticReport) throws OperationOutcomeException {
         log.debug("DiagnosticReport searchAdd " +diagnosticReportId);
 
         if (diagnosticReport == null) throw new InternalErrorException("Bundle processing error");
@@ -1284,7 +1263,7 @@ public class BundleCore {
         // Location not found. Add to database
 
 
-        for (DiagnosticReport.DiagnosticReportPerformerComponent performer : diagnosticReport.getPerformer()) {
+        for (DiagnosticReport.DiagnosticReportPerformerComponent performer : diagnosticReport.getPerformer())  {
             Resource resource = searchAddResource(performer.getActor().getReference());
 
             if (resource == null) referenceMissing(diagnosticReport, performer.getActor().getReference());
@@ -1344,7 +1323,7 @@ public class BundleCore {
 
     // KGM 22/Jan/2018 Added Immunization processing
 
-    public Immunization searchAddImmunization(String immunisationId, Immunization immunisation) {
+    public Immunization searchAddImmunization(String immunisationId, Immunization immunisation) throws OperationOutcomeException {
         log.debug("Immunization searchAdd " +immunisationId);
 
         if (immunisation == null) throw new InternalErrorException("Bundle processing error");
@@ -1429,7 +1408,7 @@ public class BundleCore {
 
 
 
-     public MedicationRequest searchAddMedicationRequest(String medicationRequestId, MedicationRequest medicationRequest) {
+     public MedicationRequest searchAddMedicationRequest(String medicationRequestId, MedicationRequest medicationRequest) throws OperationOutcomeException {
         log.debug("MedicationRequest searchAdd " +medicationRequestId);
 
         if (medicationRequest == null) throw new InternalErrorException("Bundle processing error");
@@ -1524,7 +1503,7 @@ public class BundleCore {
         return eprMedicationRequest;
     }
 
-    public Medication searchAddMedication(String medicationId, Medication Medication) {
+    public Medication searchAddMedication(String medicationId, Medication Medication) throws OperationOutcomeException {
         log.debug("Medication searchAdd " +medicationId);
 
         if (Medication == null) throw new InternalErrorException("Bundle processing error");
@@ -1605,7 +1584,7 @@ public class BundleCore {
 
 
 
-    public RiskAssessment searchAddRiskAssessment(String riskAssessmentId, RiskAssessment riskAssessment) {
+    public RiskAssessment searchAddRiskAssessment(String riskAssessmentId, RiskAssessment riskAssessment) throws OperationOutcomeException {
         log.debug("RiskAssessment searchAdd " +riskAssessmentId);
 
         if (riskAssessment == null) throw new InternalErrorException("Bundle processing error");
@@ -1688,7 +1667,7 @@ public class BundleCore {
     }
 
 
-    public ClinicalImpression searchAddClinicalImpression(String impressionId, ClinicalImpression impression) {
+    public ClinicalImpression searchAddClinicalImpression(String impressionId, ClinicalImpression impression) throws OperationOutcomeException {
         log.debug("ClinicalImpression searchAdd " +impressionId);
 
         if (impression == null) throw new InternalErrorException("Bundle processing error");
@@ -1770,7 +1749,7 @@ public class BundleCore {
         return eprClinicalImpression;
     }
 
-    public Consent searchAddConsent(String consentId, Consent consent) {
+    public Consent searchAddConsent(String consentId, Consent consent) throws OperationOutcomeException {
         log.debug("Consent searchAdd " +consentId);
 
         if (consent == null) throw new InternalErrorException("Bundle processing error");
@@ -1873,7 +1852,7 @@ public class BundleCore {
         return eprConsent;
     }
 
-    public Flag searchAddFlag(String flagId, Flag flag) {
+    public Flag searchAddFlag(String flagId, Flag flag) throws OperationOutcomeException {
         log.debug("Flag searchAdd " +flagId);
 
         if (flag == null) throw new InternalErrorException("Bundle processing error");
@@ -1952,7 +1931,7 @@ public class BundleCore {
     }
 
 
-    public Goal searchAddGoal(String goalId, Goal goal) {
+    public Goal searchAddGoal(String goalId, Goal goal) throws OperationOutcomeException {
         log.debug("Goal searchAdd " +goalId);
 
         if (goal == null) throw new InternalErrorException("Bundle processing error");
@@ -2025,7 +2004,7 @@ public class BundleCore {
     }
 
 
-    public MedicationDispense searchAddMedicationDispense(String medicationDispenseId, MedicationDispense medicationDispense) {
+    public MedicationDispense searchAddMedicationDispense(String medicationDispenseId, MedicationDispense medicationDispense) throws OperationOutcomeException {
         log.debug("MedicationDispense searchAdd " +medicationDispenseId);
 
         if (medicationDispense == null) throw new InternalErrorException("Bundle processing error");
@@ -2147,7 +2126,7 @@ public class BundleCore {
         return eprMedicationDispense;
     }
 
-    public MedicationAdministration searchAddMedicationAdministration(String medicationAdministrationId, MedicationAdministration medicationAdministration) {
+    public MedicationAdministration searchAddMedicationAdministration(String medicationAdministrationId, MedicationAdministration medicationAdministration) throws OperationOutcomeException {
         log.debug("MedicationAdministration searchAdd " +medicationAdministrationId);
 
         if (medicationAdministration == null) throw new InternalErrorException("Bundle processing error");
@@ -2258,7 +2237,7 @@ public class BundleCore {
     }
 
 
-    public MedicationStatement searchAddMedicationStatement(String medicationStatementId, MedicationStatement medicationStatement) {
+    public MedicationStatement searchAddMedicationStatement(String medicationStatementId, MedicationStatement medicationStatement) throws OperationOutcomeException {
         log.debug("MedicationStatement searchAdd " +medicationStatementId);
 
         if (medicationStatement == null) throw new InternalErrorException("Bundle processing error");
@@ -2391,7 +2370,7 @@ public class BundleCore {
 
 
 
-    public Condition searchAddCondition(String conditionId, Condition condition) {
+    public Condition searchAddCondition(String conditionId, Condition condition) throws OperationOutcomeException {
         log.debug("Condition searchAdd " +conditionId);
 
         if (condition == null) throw new InternalErrorException("Bundle processing error");
@@ -2619,7 +2598,7 @@ public class BundleCore {
     }
     */
 
-    public Binary searchAddBinary(String binaryId, Binary binary) {
+    public Binary searchAddBinary(String binaryId, Binary binary) throws OperationOutcomeException {
 
         ProducerTemplate template = context.createProducerTemplate();
         String jsonResource = ctx.newXmlParser().encodeResourceToString(binary);
@@ -2649,7 +2628,7 @@ public class BundleCore {
         return binary;
     }
 
-    public DocumentReference searchAddDocumentReference(String documentReferenceId, DocumentReference documentReference) {
+    public DocumentReference searchAddDocumentReference(String documentReferenceId, DocumentReference documentReference) throws OperationOutcomeException {
         log.debug("DocumentReference searchAdd " +documentReferenceId);
 
         if (documentReference == null) throw new InternalErrorException("Bundle processing error");
@@ -2756,7 +2735,7 @@ public class BundleCore {
     }
 
 
-    public Procedure searchAddProcedure(String procedureId, Procedure procedure) {
+    public Procedure searchAddProcedure(String procedureId, Procedure procedure) throws OperationOutcomeException {
         log.debug("Procedure searchAdd " +procedureId);
 
         if (procedure == null) throw new InternalErrorException("Bundle processing error");
@@ -2848,7 +2827,7 @@ public class BundleCore {
         return eprProcedure;
     }
 
-    public ReferralRequest searchAddReferralRequest(String referralRequestId, ReferralRequest referralRequest) {
+    public ReferralRequest searchAddReferralRequest(String referralRequestId, ReferralRequest referralRequest) throws OperationOutcomeException {
         log.debug("ReferralRequest searchAdd " +referralRequestId);
 
         if (referralRequest == null) throw new InternalErrorException("Bundle processing error");
@@ -2962,7 +2941,7 @@ public class BundleCore {
         return eprReferralRequest;
     }
 
-    public Encounter searchAddEncounter(String encounterId, Encounter encounter) {
+    public Encounter searchAddEncounter(String encounterId, Encounter encounter) throws OperationOutcomeException {
         log.debug("Encounter searchAdd " +encounterId);
 
         if (encounter == null) throw new InternalErrorException("Bundle processing error");
@@ -3119,7 +3098,7 @@ public class BundleCore {
         return eprEncounter;
     }
 
-    public EpisodeOfCare searchAddEpisodeOfCare(String episodeOfCareId, EpisodeOfCare episodeOfCare) {
+    public EpisodeOfCare searchAddEpisodeOfCare(String episodeOfCareId, EpisodeOfCare episodeOfCare) throws OperationOutcomeException {
         log.debug("EpisodeOfCare searchAdd " +episodeOfCareId);
 
         if (episodeOfCare == null) throw new InternalErrorException("Bundle processing error");
@@ -3220,7 +3199,7 @@ public class BundleCore {
 
 
 
-    public Patient searchAddPatient(String patientId, Patient patient) {
+    public Patient searchAddPatient(String patientId, Patient patient) throws OperationOutcomeException {
 
             log.info("Patient searchAdd " + patientId);
 
@@ -3287,7 +3266,7 @@ public class BundleCore {
         return eprPatient;
     }
 
-    public Questionnaire searchAddQuestionnaire(String formId, Questionnaire form) {
+    public Questionnaire searchAddQuestionnaire(String formId, Questionnaire form) throws OperationOutcomeException {
 
         log.debug("Questionnaire searchAdd " + formId);
 
@@ -3336,7 +3315,7 @@ public class BundleCore {
         return eprQuestionnaire;
     }
 
-    public RelatedPerson searchAddRelatedPerson(String personId, RelatedPerson person) {
+    public RelatedPerson searchAddRelatedPerson(String personId, RelatedPerson person) throws OperationOutcomeException {
 
         log.debug("RelatedPerson searchAdd " + personId);
 
@@ -3410,12 +3389,12 @@ public class BundleCore {
         OperationOutcomeFactory.convertToException(outcome);
     }
 
-    private void processOperationOutcome(OperationOutcome operationOutcome) {
+    private void processOperationOutcome(OperationOutcome operationOutcome) throws OperationOutcomeException {
         this.operationOutcome = operationOutcome;
 
         log.debug("Server Returned Operation Outcome: " + ctx.newJsonParser().encodeResourceToString(operationOutcome));
 
-        OperationOutcomeFactory.convertToException(operationOutcome);
+        throw new OperationOutcomeException(operationOutcome);
     }
     private void setResourceMap(String referenceId, Resource resource) {
         if (resourceMap.get(referenceId) != null) {
