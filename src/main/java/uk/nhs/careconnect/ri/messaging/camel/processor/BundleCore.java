@@ -7,6 +7,7 @@ import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.apache.camel.*;
+import org.apache.commons.io.IOUtils;
 import org.hl7.fhir.dstu3.model.*;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
@@ -383,6 +384,7 @@ public class BundleCore {
             InputStream inputStream = (InputStream) exchange.getIn().getBody();
 
             Reader reader = new InputStreamReader(inputStream);
+
             iResource = ctx.newJsonParser().parseResource(reader);
             if (iResource instanceof OperationOutcome) {
                 processOperationOutcome((OperationOutcome) iResource);
@@ -390,7 +392,8 @@ public class BundleCore {
             if (responseCode.equals("200") && responseCode.equals("201")) {
                 log.error("Unexpected Error on "+exchange.getIn().getHeader(Exchange.HTTP_PATH).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_QUERY).toString());
             }
-        } catch (InvalidRequestException ex) {
+        } catch (BaseServerResponseException ex) {
+            // KGM pass back HAPI Exception errors
             throw ex;
         }
         catch(Exception ex) {
@@ -3409,7 +3412,9 @@ public class BundleCore {
 
     private void processOperationOutcome(OperationOutcome operationOutcome) {
         this.operationOutcome = operationOutcome;
-        log.debug("Server Returned: "+ctx.newJsonParser().encodeResourceToString(operationOutcome));
+
+        log.debug("Server Returned Operation Outcome: " + ctx.newJsonParser().encodeResourceToString(operationOutcome));
+
         OperationOutcomeFactory.convertToException(operationOutcome);
     }
     private void setResourceMap(String referenceId, Resource resource) {
