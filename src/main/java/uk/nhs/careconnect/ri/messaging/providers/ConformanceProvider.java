@@ -81,8 +81,12 @@ public class ConformanceProvider extends ServerCapabilityStatementProvider {
         capabilityStatement.getSoftware().setVersion(System.getProperty("ccri.software.version"));
         capabilityStatement.getImplementation().setDescription(System.getProperty("ccri.server"));
         capabilityStatement.getImplementation().setUrl(System.getProperty("ccri.server.base"));
-        // TODO KGM move to config
-        capabilityStatement.getImplementationGuide().add(new UriType(System.getProperty("ccri.guide")));
+
+        if (capabilityStatement.getImplementationGuide().size() == 0) {
+            capabilityStatement.getImplementationGuide().add(new UriType(System.getProperty("ccri.guide")));
+            capabilityStatement.setPublisher("NHS Digital");
+        }
+
 
         capabilityStatement.setStatus(Enumerations.PublicationStatus.ACTIVE);
         /*
@@ -94,10 +98,47 @@ public class ConformanceProvider extends ServerCapabilityStatementProvider {
         }
         */
         if (restfulServer != null) {
+            log.info("restful Server not null");
+            for (CapabilityStatement.CapabilityStatementRestComponent nextRest : capabilityStatement.getRest()) {
+                nextRest.setMode(CapabilityStatement.RestfulCapabilityMode.SERVER);
+
+                // KGM only add if not already present
+                if (nextRest.getSecurity().getService().size() == 0 && oauth2.equals("true")) {
+                    if (oauth2token != null && oauth2register != null && oauth2authorize != null) {
+                        nextRest.getSecurity()
+                                .addService().addCoding()
+                                .setSystem("http://hl7.org/fhir/restful-security-service")
+                                .setDisplay("SMART-on-FHIR")
+                                .setSystem("SMART-on-FHIR");
+                        Extension securityExtension = nextRest.getSecurity().addExtension()
+                                .setUrl("http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris");
+
+                        securityExtension.addExtension()
+                                .setUrl("authorize")
+                                .setValue(new UriType(oauth2authorize));
+
+                        securityExtension.addExtension()
+                                .setUrl("register")
+                                .setValue(new UriType(oauth2register));
+
+                        securityExtension.addExtension()
+                                .setUrl("token")
+                                .setValue(new UriType(oauth2token));
+                    }
+                }
+            }
             log.trace("restful Server not null");
             for (CapabilityStatement.CapabilityStatementRestComponent nextRest : capabilityStatement.getRest()) {
                 for (CapabilityStatement.CapabilityStatementRestResourceComponent restResourceComponent : nextRest.getResource()) {
-                	
+
+                    if (restResourceComponent.getType().equals("OperationDefinition")) {
+                        nextRest.getResource().remove(restResourceComponent);
+                        break;
+                    }
+                    if (restResourceComponent.getType().equals("StructureDefinition")) {
+                        nextRest.getResource().remove(restResourceComponent);
+                        break;
+                    }
                 	// Start of CRUD operations
                	 List<ResourceInteractionComponent> l = restResourceComponent.getInteraction();
                     for(int i=0;i<l.size();i++)
