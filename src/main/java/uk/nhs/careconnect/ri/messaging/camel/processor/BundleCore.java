@@ -225,7 +225,7 @@ public class BundleCore {
                                 case "CarePlan":
                                     resource = searchAddCarePlan(referenceId, (CarePlan) iResource);
                                     break;
-                              /*  case "CareTeam":
+                                case "CareTeam":
                                     resource = searchAddCareTeam(referenceId, (CareTeam) iResource);
                                     break;
                                 case "ClinicalImpression":
@@ -233,7 +233,7 @@ public class BundleCore {
                                     break;
                                 case "Consent":
                                     resource = searchAddConsent(referenceId, (Consent) iResource);
-                                    break; */
+                                    break;
                                 case "DocumentReference":
                                     resource = searchAddDocumentReference(referenceId, (DocumentReference) iResource);
                                     break;
