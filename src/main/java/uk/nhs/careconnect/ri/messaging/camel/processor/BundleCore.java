@@ -344,7 +344,7 @@ public class BundleCore {
             log.error("Operation outcome with Resonse Code = " + responseCode);
             processOperationOutcome((OperationOutcome) iresource);
         }
-        if (!responseCode.equals("200") || !responseCode.equals("201")) {
+        if (!responseCode.equals("200") && !responseCode.equals("201")) {
             log.error("Unexpected Error on "+exchange.getIn().getHeader(Exchange.HTTP_PATH).toString() + " " + exchange.getIn().getHeader(Exchange.HTTP_QUERY).toString());
         }
         return iresource;
