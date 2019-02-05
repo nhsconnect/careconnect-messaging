@@ -3295,13 +3295,25 @@ public class BundleCore {
         if (eprQuestionnaire != null) {
             setResourceMap(formId, eprQuestionnaire);
 
-            return eprQuestionnaire;
+           // return eprQuestionnaire;
         }
 
         IBaseResource iResource = null;
-        String jsonResource = ctx.newJsonParser().encodeResourceToString(form);
 
-        iResource = sendResource("POST","Questionnaire",jsonResource);
+
+
+        String xhttpMethod = "POST";
+        String xhttpPath = "Questionnaire";
+        // Location found do not add
+        if (eprQuestionnaire != null) {
+            xhttpMethod="PUT";
+           // setResourceMap(formId,eprEpisodeOfCare);
+            // Want id value, no path or resource
+            xhttpPath = "Questionnaire/"+eprQuestionnaire.getIdElement().getIdPart();
+            form.setId(eprQuestionnaire.getId());
+        }
+        String jsonResource = ctx.newJsonParser().encodeResourceToString(form);
+        iResource = sendResource(xhttpMethod,xhttpPath,jsonResource);
 
         if (iResource instanceof Questionnaire) {
             eprQuestionnaire = (Questionnaire) iResource;
