@@ -45,8 +45,8 @@ public class CcriMessaging {
     public static void main(String[] args) {
         System.setProperty("hawtio.authenticationEnabled", "false");
         System.setProperty("management.security.enabled","false");
-        System.setProperty("server.port", "8182");
-        System.setProperty("server.context-path", "/ccri-messaging");
+//        System.setProperty("server.port", "8182");
+ //       System.setProperty("server.context-path", "/ccri-messaging");
         System.setProperty("management.contextPath","");
         SpringApplication.run(CcriMessaging.class, args);
 

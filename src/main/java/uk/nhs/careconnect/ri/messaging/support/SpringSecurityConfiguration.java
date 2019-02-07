@@ -32,11 +32,13 @@ public class SpringSecurityConfiguration extends WebSecurityConfigurerAdapter {
                 .authorizeRequests()
                 .antMatchers("/").permitAll().and().csrf().disable();
 
+/* REVISIT
         http
                 .authorizeRequests()
                 .antMatchers("/error").permitAll()
                 .antMatchers("/hawtio/**").hasRole("ACTUATOR")
                 .antMatchers("/jolokia/**").hasRole("ACTUATOR")
                 .and().httpBasic();
+*/
     }
 }
