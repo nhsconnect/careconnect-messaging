@@ -1075,7 +1075,9 @@ public class BundleCore {
             form.setAuthor(getReference(resource));
         }
         if (form.hasItem()) {
-                form = questionnaireItem(form);
+            for (QuestionnaireResponse.QuestionnaireResponseItemComponent itemComponent :form.getItem()) {
+                questionnaireItem(itemComponent,form);
+            }
         }
 
 
@@ -1109,15 +1111,15 @@ public class BundleCore {
     }
 
 
-    public QuestionnaireResponse questionnaireItem(QuestionnaireResponse form) throws OperationOutcomeException {
-        for (QuestionnaireResponse.QuestionnaireResponseItemComponent itemComponent :form.getItem()) {
+    public QuestionnaireResponse questionnaireItem(QuestionnaireResponse.QuestionnaireResponseItemComponent itemComponent, QuestionnaireResponse form) throws OperationOutcomeException {
+
             if (itemComponent.hasAnswer()) {
                 for (QuestionnaireResponse.QuestionnaireResponseItemAnswerComponent answerComponent : itemComponent.getAnswer()) {
                     if (answerComponent.hasValueReference()) {
                         try {
                             Resource resource = searchAddResource(answerComponent.getValueReference().getReference());
 
-                            if (resource == null) referenceMissing(form, form.getAuthor().getReference());
+                            if (resource == null) referenceMissing(form, answerComponent.getValueReference().getReference());
                             answerComponent.setValue(getReference(resource));
                         } catch (Exception ex) {
 
@@ -1125,8 +1127,12 @@ public class BundleCore {
                     }
                 }
             }
-        }
-        return form;
+            if (itemComponent.hasItem()) {
+                for (QuestionnaireResponse.QuestionnaireResponseItemComponent subItem : itemComponent.getItem()) {
+                    questionnaireItem(subItem,form);
+                }
+            }
+            return null;
     }
 
 
