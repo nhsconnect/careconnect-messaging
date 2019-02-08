@@ -1062,7 +1062,7 @@ public class BundleCore {
             if (resource == null) referenceMissing(form, form.getSource().getReference());
             form.setSource(getReference(resource));
         }
-        if (form.hasQuestionnaire()) {
+        if (form.hasQuestionnaire() && form.getQuestionnaire().getReference() != null) {
             Resource resource = searchAddResource(form.getQuestionnaire().getReference());
 
             if (resource == null) referenceMissing(form, form.getQuestionnaire().getReference());
