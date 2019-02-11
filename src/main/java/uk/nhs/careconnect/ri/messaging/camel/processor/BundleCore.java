@@ -211,8 +211,8 @@ public class BundleCore {
                             resource = searchAddMedicationRequest(referenceId, (MedicationRequest) iResource);
                         } else if (iResource instanceof MedicationStatement) {
                             resource = searchAddMedicationStatement(referenceId, (MedicationStatement) iResource);
-                      //  } else if (iResource instanceof ListResource) {
-                      //      resource = searchAddList(referenceId, (ListResource) iResource);
+                       } else if (iResource instanceof ListResource) {
+                           resource = searchAddList(referenceId, (ListResource) iResource);
                         } else if (iResource instanceof Immunization) {
                             resource = searchAddImmunization(referenceId, (Immunization) iResource);
 
