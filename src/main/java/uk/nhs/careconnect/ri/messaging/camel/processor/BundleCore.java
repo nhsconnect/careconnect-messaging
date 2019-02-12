@@ -264,9 +264,9 @@ public class BundleCore {
                                 case "Questionnaire":
                                     resource = searchAddQuestionnaire(referenceId, (Questionnaire) iResource);
                                     break;
-                              /*  case "RelatedPerson":
+                                case "RelatedPerson":
                                     resource = searchAddRelatedPerson(referenceId, (RelatedPerson) iResource);
-                                    break; */
+                                    break;
                                 case "ReferralRequest":
                                     resource = searchAddReferralRequest(referenceId, (ReferralRequest) iResource);
                                     break;
