@@ -418,11 +418,19 @@ public class BundleCore {
             if (resource == null) referenceMissing(list, list.getEncounter().getReference());
             list.setEncounter(getReference(resource));
         }
+
         if (list.hasSubject() && checkNotInternalReference(list.getSubject())) {
             Resource resource = searchAddResource(list.getSubject().getReference());
 
             if (resource == null) referenceMissing(list, list.getSubject().getReference());
             list.setSubject(getReference(resource));
+        }
+
+        if (list.hasSource()) {
+            Resource resource = searchAddResource(list.getSource().getReference());
+
+            if (resource == null) referenceMissing(list, list.getSource().getReference());
+            list.setSource(getReference(resource));
         }
 
         for (ListResource.ListEntryComponent listEntry : list.getEntry()) {
