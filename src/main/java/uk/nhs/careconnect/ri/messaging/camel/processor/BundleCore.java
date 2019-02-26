@@ -360,6 +360,17 @@ public class BundleCore {
         });
         return getResource(exchange);
     }
+
+    public IBaseResource queryResourceUrl(String uri, String xhttpPath) throws OperationOutcomeException {
+        Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
+            public void process(Exchange exchange) throws Exception {
+                exchange.getIn().setHeader(Exchange.HTTP_QUERY, "url=" + uri);
+                exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
+                exchange.getIn().setHeader(Exchange.HTTP_PATH, xhttpPath);
+            }
+        });
+        return getResource(exchange);
+    }
     
     
     public IBaseResource sendResource( String xhttpMethod, String xhttpPath, Object httpBody) throws OperationOutcomeException
@@ -3305,6 +3316,20 @@ public class BundleCore {
                 }
             }
         }
+        // Questionnaire is a reference resource so use Url
+        if (eprQuestionnaire != null && form.hasUrl()) {
+
+            IBaseResource iresource = queryResourceUrl( form.getUrl(), "Questionnaire");
+
+            if (iresource instanceof Bundle) {
+                Bundle returnedBundle = (Bundle) iresource;
+                if (returnedBundle.getEntry().size() > 0) {
+                    eprQuestionnaire = (Questionnaire) returnedBundle.getEntry().get(0).getResource();
+                    log.debug("Found Questionnaire = " + eprQuestionnaire.getId());
+                }
+            }
+        }
+
         // Questionnaire found do not add
         if (eprQuestionnaire != null) {
             setResourceMap(formId, eprQuestionnaire);
