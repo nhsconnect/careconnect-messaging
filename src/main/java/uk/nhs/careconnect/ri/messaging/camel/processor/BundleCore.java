@@ -397,9 +397,12 @@ public class BundleCore {
                 return clientEPR.search().forResource(Immunization.class).where(Immunization.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
             case "List":
                 return clientEPR.search().forResource(ListResource.class).where(ListResource.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+
+            case "Location":
+                return clientEPR.search().forResource(Location.class).where(Location.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
           //  case "Medication":
           //      return clientEPR.search().forResource(Medication.class).where(Medication.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
-            case "MedicationDispense.":
+            case "MedicationDispense":
                 return clientEPR.search().forResource(MedicationDispense.class).where(MedicationDispense.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
             case "MedicationRequest":
                 return clientEPR.search().forResource(MedicationRequest.class).where(MedicationRequest.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
@@ -431,6 +434,8 @@ public class BundleCore {
 
             case "Questionnaire":
                 return clientEPR.search().forResource(Questionnaire.class).where(Questionnaire.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            default:
+                log.info("Not processed "+resourceName);
         }
 
         log.info("Query Resource " + resourceType.getSimpleName());
