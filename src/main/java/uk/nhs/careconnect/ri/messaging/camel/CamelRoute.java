@@ -15,6 +15,7 @@ import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPostProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPreProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.processor.BundleMessage;
 import uk.nhs.careconnect.ri.messaging.camel.processor.CompositionDocumentBundle;
+import uk.nhs.careconnect.ri.messaging.camel.processor.FHIRClient;
 import uk.nhs.careconnect.ri.messaging.camel.processor.HL7v2A05toFHIRBundle;
 
 import java.io.InputStream;
@@ -37,10 +38,13 @@ public class CamelRoute extends RouteBuilder {
 	private String tkwBase;
 	
 	@Value("${ccri.server.base}")
-    private String hapiBase;
+    private String messageBase;
 
 	@Value("${ccri.edms.server.base}")
 	private String edmsBaseFHIR;
+
+	@Value("${ccri.epr.server.base}")
+	private String eprBaseFHIR;
 
 	
     @Override
@@ -51,9 +55,14 @@ public class CamelRoute extends RouteBuilder {
 
 		GatewayPostProcessor camelPostProcessor = new GatewayPostProcessor();
 
+
+
 		FhirContext ctx = FhirContext.forDstu3();
-		BundleMessage bundleMessage = new BundleMessage(ctx, hapiBase, edmsBaseFHIR);
-        CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, hapiBase, edmsBaseFHIR);
+
+		FHIRClient eprClient = new FHIRClient(ctx,eprBase);
+
+		BundleMessage bundleMessage = new BundleMessage(ctx, eprBaseFHIR, edmsBaseFHIR);
+        CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, messageBase, edmsBaseFHIR);
         //DocumentReferenceDocumentBundle documentReferenceDocumentBundle = new DocumentReferenceDocumentBundle(ctx,hapiBase);
        // BinaryResource binaryResource = new BinaryResource(ctx, hapiBase);
 
@@ -127,14 +136,16 @@ public class CamelRoute extends RouteBuilder {
 				.to("log:uk.nhs.careconnect.FHIRGateway.complete?level=INFO&showHeaders=true&showExchangeId=true")
 				.convertBodyTo(InputStream.class);
 
+		/*
 		from("direct:EPRServer")
             .routeId("EPR FHIR Server")
 				.process(camelProcessor)
 				.to("log:uk.nhs.careconnect.FHIRGateway.start?level=INFO&showHeaders=true&showExchangeId=true")
-                .to(eprBase)
+				.process(eprClient)
+                //.to(eprBase)
 				.process(camelPostProcessor)
                 .to("log:uk.nhs.careconnect.FHIRGateway.complete?level=INFO&showHeaders=true&showExchangeId=true")
 				.convertBodyTo(InputStream.class);
-
+*/
     }
 }
