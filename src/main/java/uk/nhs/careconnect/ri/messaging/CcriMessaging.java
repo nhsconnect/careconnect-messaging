@@ -102,7 +102,7 @@ public class CcriMessaging {
             @Override
             public void beforeApplicationStart(CamelContext camelContext) {
 
-                camelContext.setNameStrategy(new DefaultCamelContextNameStrategy("CcriTIE"));
+                camelContext.setNameStrategy(new DefaultCamelContextNameStrategy("CCRIMessaging"));
 
                 final org.apache.camel.impl.SimpleRegistry registry = new org.apache.camel.impl.SimpleRegistry();
                 final org.apache.camel.impl.CompositeRegistry compositeRegistry = new org.apache.camel.impl.CompositeRegistry();
