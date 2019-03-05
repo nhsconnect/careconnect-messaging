@@ -1,6 +1,8 @@
 package uk.nhs.careconnect.ri.messaging.camel.processor;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.annotation.Operation;
+import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
@@ -9,15 +11,18 @@ import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.apache.camel.*;
 import org.apache.commons.io.IOUtils;
 import org.hl7.fhir.dstu3.model.*;
+import org.hl7.fhir.instance.model.api.IBase;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeException;
 import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeFactory;
 
+import javax.print.Doc;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,12 +30,14 @@ import java.util.Map;
 
 public class BundleCore {
 
-    public BundleCore(FhirContext ctx, CamelContext camelContext, Bundle bundle, String hapiBase, String edmsBase) {
+    public BundleCore(FhirContext ctx, CamelContext camelContext, Bundle bundle, String eprBase, String edmsBase) {
         this.ctx = ctx;
         this.bundle = bundle;
         this.context = camelContext;
-        this.client = FhirContext.forDstu3().newRestfulGenericClient("https://directory.spineservices.nhs.uk/STU3");
-        this.hapiBase = hapiBase;
+        this.clientODS = FhirContext.forDstu3().newRestfulGenericClient("https://directory.spineservices.nhs.uk/STU3");
+        this.clientEPR = FhirContext.forDstu3().newRestfulGenericClient(eprBase);
+        this.clientEDMS = FhirContext.forDstu3().newRestfulGenericClient(edmsBase);
+        this.eprBase = eprBase;
         this.edmsBase = edmsBase;
     }
 
@@ -38,9 +45,13 @@ public class BundleCore {
 
     FhirContext ctx;
 
-    IGenericClient client;
+    IGenericClient clientODS;
 
-    private String hapiBase;
+    IGenericClient clientEPR;
+
+    IGenericClient clientEDMS;
+
+    private String eprBase;
 
     private String edmsBase;
 
@@ -160,7 +171,7 @@ public class BundleCore {
                     String sdsCode = referenceId.replace("https://directory.spineservices.nhs.uk/STU3/Organization/","");
                     Organization sdsOrganization = null;
                     try {
-                        sdsOrganization = client.read().resource(Organization.class).withId(sdsCode).execute();
+                        sdsOrganization = clientODS.read().resource(Organization.class).withId(sdsCode).execute();
                     } catch(Exception ex) {
                         throw new ResourceNotFoundException("https://directory.spineservices.nhs.uk/STU3/Organization/"+sdsCode);
                     }
@@ -318,6 +329,7 @@ public class BundleCore {
         //return null;
     }
 
+    /*
     public IBaseResource getResource(Exchange exchange) throws OperationOutcomeException
     {
         InputStream inputStream = (InputStream) exchange.getIn().getBody();
@@ -349,30 +361,125 @@ public class BundleCore {
         }
         return iresource;
     }
+    */
 
-    public IBaseResource queryResource(Identifier identifier, String xhttpPath) throws OperationOutcomeException {
-        Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
+    public IBaseResource queryResource(Identifier identifier, String resourceName) throws OperationOutcomeException {
+
+        log.info("Search "+resourceName+"?identifier="+identifier.getSystem()+"|"+identifier.getValue());
+        Class resourceType = null;
+
+        switch (resourceName) {
+            case "AllergyIntolerance":
+                return clientEPR.search().forResource(AllergyIntolerance.class).where(AllergyIntolerance.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Appointment":
+                return clientEPR.search().forResource(Appointment.class).where(Appointment.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "CarePlan":
+                return clientEPR.search().forResource(CarePlan.class).where(CarePlan.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "ClinicalImpression":
+                return clientEPR.search().forResource(ClinicalImpression.class).where(ClinicalImpression.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+
+                case "Condition":
+                return clientEPR.search().forResource(Condition.class).where(Condition.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Consent":
+                return clientEPR.search().forResource(Consent.class).where(Consent.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+
+            case "DocumentReference":
+                return clientEPR.search().forResource(DocumentReference.class).where(DocumentReference.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Encounter":
+                return clientEPR.search().forResource(Encounter.class).where(Encounter.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "EpisodeOfCare":
+                return clientEPR.search().forResource(EpisodeOfCare.class).where(EpisodeOfCare.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Flag":
+                return clientEPR.search().forResource(Flag.class).where(Flag.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "HealthcareService":
+                return clientEPR.search().forResource(HealthcareService.class).where(HealthcareService.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Immunization":
+                return clientEPR.search().forResource(Immunization.class).where(Immunization.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "List":
+                return clientEPR.search().forResource(ListResource.class).where(ListResource.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+
+            case "Location":
+                return clientEPR.search().forResource(Location.class).where(Location.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+          //  case "Medication":
+          //      return clientEPR.search().forResource(Medication.class).where(Medication.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "MedicationDispense":
+                return clientEPR.search().forResource(MedicationDispense.class).where(MedicationDispense.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "MedicationRequest":
+                return clientEPR.search().forResource(MedicationRequest.class).where(MedicationRequest.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "MedicationAdministration":
+                return clientEPR.search().forResource(MedicationAdministration.class).where(MedicationAdministration.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "MedicationStatement":
+                return clientEPR.search().forResource(MedicationStatement.class).where(MedicationStatement.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Observation":
+                return clientEPR.search().forResource(Observation.class).where(Observation.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Organization":
+                return clientEPR.search().forResource(Organization.class).where(Organization.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Practitioner":
+                return clientEPR.search().forResource(Practitioner.class).where(Practitioner.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Procedure":
+                return clientEPR.search().forResource(Procedure.class).where(Procedure.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "QuestionnaireResponse":
+                return clientEPR.search().forResource(QuestionnaireResponse.class).where(QuestionnaireResponse.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "ReferralRequest":
+                return clientEPR.search().forResource(ReferralRequest.class).where(ReferralRequest.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "RelatedPerson":
+                return clientEPR.search().forResource(RelatedPerson.class).where(RelatedPerson.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Schedule":
+                return clientEPR.search().forResource(Schedule.class).where(Schedule.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            case "Slot":
+                return clientEPR.search().forResource(Slot.class).where(Slot.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+
+            case "Patient":
+                return clientEPR.search().forResource(Patient.class).where(Patient.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+
+            case "Questionnaire":
+                return clientEPR.search().forResource(Questionnaire.class).where(Questionnaire.IDENTIFIER.exactly().systemAndCode(identifier.getSystem(),identifier.getValue())).returnBundle(Bundle.class).execute();
+            default:
+                log.info("Not processed "+resourceName);
+        }
+
+        log.info("Query Resource " + resourceType.getSimpleName());
+
+       /* Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
             public void process(Exchange exchange) throws Exception {
-                exchange.getIn().setHeader(Exchange.HTTP_QUERY, "identifier=" + identifier.getSystem() + "|" + identifier.getValue());
+                exchange.getIn().setHeader(Exchange.HTTP_QUERY, );
                 exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
                 exchange.getIn().setHeader(Exchange.HTTP_PATH, xhttpPath);
             }
         });
-        return getResource(exchange);
+        return getResource(exchange); */
+       return null;
     }
 
-    public IBaseResource queryResourceUrl(String uri, String xhttpPath) throws OperationOutcomeException {
-        Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-            public void process(Exchange exchange) throws Exception {
-                exchange.getIn().setHeader(Exchange.HTTP_QUERY, "url=" + uri);
-                exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                exchange.getIn().setHeader(Exchange.HTTP_PATH, xhttpPath);
-            }
-        });
-        return getResource(exchange);
+    public IBaseResource createResource( IBaseResource resource) throws OperationOutcomeException
+    {
+
+        log.info("Create "+resource.getClass().getSimpleName());
+        MethodOutcome outcome =  clientEPR.create().resource(resource).execute();
+
+        if (outcome.getCreated()) return outcome.getResource();
+
+        processOperationOutcome((OperationOutcome) outcome.getOperationOutcome());
+
+        return null;
+
     }
-    
-    
+
+    public IBaseResource updateResource( IBaseResource resource) throws OperationOutcomeException
+    {
+        log.info("Update "+resource.getClass().getSimpleName()+"/"+resource.getIdElement().getIdPart());
+        MethodOutcome outcome =  clientEPR.update().resource(resource).execute();
+
+        if (outcome.getOperationOutcome() != null) processOperationOutcome((OperationOutcome) outcome.getOperationOutcome());
+
+        if (outcome.getResource() instanceof OperationOutcome) processOperationOutcome((OperationOutcome) outcome.getResource());
+
+
+        return outcome.getResource();
+
+    }
+
+/*
     public IBaseResource sendResource( String xhttpMethod, String xhttpPath, Object httpBody) throws OperationOutcomeException
     {
         String httpMethod= xhttpMethod;
@@ -389,9 +496,8 @@ public class BundleCore {
             }
         });
         return getResource(exchange);
-
-
     }
+    */
 
     private ListResource searchAddList(String listId, ListResource list) throws OperationOutcomeException {
         log.debug("List searchAdd " +listId);
@@ -412,7 +518,8 @@ public class BundleCore {
         
 
         for (Identifier identifier : list.getIdentifier()) {
-            IBaseResource iresource = queryResource(identifier,"List");
+            // org.hl7.fhir.instance.model.api.
+            IBaseResource iresource = queryResource(identifier, "List");
                
             if (iresource instanceof Bundle) {
                 Bundle returnedBundle = (Bundle) iresource;
@@ -454,19 +561,16 @@ public class BundleCore {
 
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "List";
+
         // Location found do not add
         if (eprListResource != null) {
-            xhttpMethod="PUT";
-            setResourceMap(listId,eprListResource);
-            // Want id value, no path or resource
-            xhttpPath = "List/"+eprListResource.getIdElement().getIdPart();
-            list.setId(eprListResource.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(list);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            setResourceMap(listId,eprListResource);
+            list.setId(eprListResource.getId());
+            iResource = updateResource(list);
+        } else {
+            iResource = createResource(list);
+        }
 
         if (iResource instanceof ListResource) {
             eprListResource = (ListResource) iResource;
@@ -525,9 +629,9 @@ public class BundleCore {
 
 
         IBaseResource iResource = null;
-        String jsonResource = ctx.newJsonParser().encodeResourceToString(practitioner);
+        //String jsonResource = ctx.newJsonParser().encodeResourceToString(practitioner);
 
-        iResource = sendResource("POST","Practitioner",jsonResource);
+        iResource = createResource(practitioner);
 
         if (iResource instanceof Practitioner) {
             eprPractitioner = (Practitioner) iResource;
@@ -589,9 +693,8 @@ public class BundleCore {
         }
 
         IBaseResource iResource = null;
-        String jsonResource = ctx.newJsonParser().encodeResourceToString(organisation);
 
-        iResource = sendResource("POST","Organization",jsonResource);
+        iResource = createResource(organisation);
 
         if (iResource instanceof Organization) {
             eprOrganization = (Organization) iResource;
@@ -669,8 +772,8 @@ public class BundleCore {
 
 
         IBaseResource iResource = null;
-        String jsonResource = ctx.newJsonParser().encodeResourceToString(service);
-        iResource = sendResource("POST","HealthcareService",jsonResource);
+        //String jsonResource = ctx.newJsonParser().encodeResourceToString();
+        iResource = createResource(service);
 
         if (iResource instanceof HealthcareService) {
             eprService = (HealthcareService) iResource;
@@ -733,16 +836,17 @@ public class BundleCore {
         String xhttpPath = "Location";
         // Location found do not add
         if (eprLocation != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(locationId,eprLocation);
-            // Want id value, no path or resource
-            xhttpPath = "Location/"+eprLocation.getIdElement().getIdPart();
+
+
             location.setId(eprLocation.getId());
+            iResource = updateResource(location);
+        } else {
+
+
+            iResource = createResource(location);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(location);
-
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
-
         if (iResource instanceof Location) {
             eprLocation = (Location) iResource;
             setResourceMap(locationId,eprLocation);
@@ -804,19 +908,18 @@ public class BundleCore {
         }
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "AllergyIntolerance";
+
         // Location found do not add
         if (eprAllergyIntolerance != null) {
-            xhttpMethod="PUT";
-            setResourceMap(allergyIntoleranceId,eprAllergyIntolerance);
-            // Want id value, no path or resource
-            xhttpPath = "AllergyIntolerance/"+eprAllergyIntolerance.getIdElement().getIdPart();
-            allergyIntolerance.setId(eprAllergyIntolerance.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(allergyIntolerance);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            setResourceMap(allergyIntoleranceId,eprAllergyIntolerance);
+
+            allergyIntolerance.setId(eprAllergyIntolerance.getId());
+            iResource = updateResource(allergyIntolerance);
+        } else {
+
+            iResource = createResource(allergyIntolerance);
+        }
 
         if (iResource instanceof AllergyIntolerance) {
             eprAllergyIntolerance = (AllergyIntolerance) iResource;
@@ -906,19 +1009,18 @@ public class BundleCore {
         carePlan.setSupportingInfo(referenceSupporting);
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "CarePlan";
+
         // Location found do not add
         if (eprCarePlan != null) {
-            xhttpMethod="PUT";
             setResourceMap(carePlanId,eprCarePlan);
-            // Want id value, no path or resource
-            xhttpPath = "CarePlan/"+eprCarePlan.getIdElement().getIdPart();
             carePlan.setId(eprCarePlan.getId());
+            iResource = updateResource(carePlan);
+        } else {
+            iResource = createResource(carePlan);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(carePlan);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
+
 
         if (iResource instanceof CarePlan) {
             eprCarePlan = (CarePlan) iResource;
@@ -1003,19 +1105,21 @@ public class BundleCore {
         careTeam.setReasonReference(references);
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "CareTeam";
+
         // Location found do not add
         if (eprCareTeam != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(careTeamId,eprCareTeam);
             // Want id value, no path or resource
-            xhttpPath = "CareTeam/"+eprCareTeam.getIdElement().getIdPart();
-            careTeam.setId(eprCareTeam.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(careTeam);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            careTeam.setId(eprCareTeam.getId());
+            iResource = updateResource(careTeam);
+        } else {
+            iResource = createResource(careTeam);
+        }
+
+
+
 
         if (iResource instanceof CareTeam) {
             eprCareTeam = (CareTeam) iResource;
@@ -1101,19 +1205,20 @@ public class BundleCore {
 
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "QuestionnaireResponse";
+
         // Location found do not add
         if (eprQuestionnaireResponse != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(formId,eprQuestionnaireResponse);
             // Want id value, no path or resource
-            xhttpPath = "QuestionnaireResponse/"+eprQuestionnaireResponse.getIdElement().getIdPart();
             form.setId(eprQuestionnaireResponse.getId());
+            iResource = updateResource(form);
+        } else {
+            iResource = createResource(form);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(form);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
+
 
         if (iResource instanceof QuestionnaireResponse) {
             eprQuestionnaireResponse = (QuestionnaireResponse) iResource;
@@ -1220,19 +1325,18 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "Observation";
         // Location found do not add
         if (eprObservation != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(observationId,eprObservation);
             // Want id value, no path or resource
-            xhttpPath = "Observation/"+eprObservation.getIdElement().getIdPart();
-            observation.setId(eprObservation.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(observation);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            observation.setId(eprObservation.getId());
+            iResource = updateResource(observation);
+        } else {
+            iResource = createResource(observation);
+        }
+
 
         if (iResource instanceof Observation) {
             eprObservation = (Observation) iResource;
@@ -1318,19 +1422,19 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "DiagnosticReport";
+
         // Location found do not add
         if (eprDiagnosticReport != null) {
-            xhttpMethod="PUT";
             setResourceMap(diagnosticReportId,eprDiagnosticReport);
             // Want id value, no path or resource
-            xhttpPath = "DiagnosticReport/"+eprDiagnosticReport.getIdElement().getIdPart();
-            diagnosticReport.setId(eprDiagnosticReport.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(diagnosticReport);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            diagnosticReport.setId(eprDiagnosticReport.getId());
+            iResource = updateResource(diagnosticReport);
+        } else {
+            iResource = createResource(diagnosticReport);
+        }
+
+
 
         if (iResource instanceof DiagnosticReport) {
             eprDiagnosticReport = (DiagnosticReport) iResource;
@@ -1403,19 +1507,19 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "Immunization";
+
         // Location found do not add
         if (eprImmunization != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(immunisationId,eprImmunization);
             // Want id value, no path or resource
-            xhttpPath = "Immunization/"+eprImmunization.getIdElement().getIdPart();
             immunisation.setId(eprImmunization.getId());
+            iResource = updateResource(immunisation);
+        } else {
+            iResource = createResource(immunisation);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(immunisation);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
 
         if (iResource instanceof Immunization) {
             eprImmunization = (Immunization) iResource;
@@ -1500,19 +1604,19 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "MedicationRequest";
+
         // Location found do not add
         if (eprMedicationRequest != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(medicationRequestId,eprMedicationRequest);
             // Want id value, no path or resource
-            xhttpPath = "MedicationRequest/"+eprMedicationRequest.getIdElement().getIdPart();
-            medicationRequest.setId(eprMedicationRequest.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(medicationRequest);
 
-         iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            medicationRequest.setId(eprMedicationRequest.getId());
+            iResource = updateResource(medicationRequest);
+        } else {
+            iResource = createResource(medicationRequest);
+        }
+
 
         if (iResource instanceof MedicationRequest) {
             eprMedicationRequest = (MedicationRequest) iResource;
@@ -1528,10 +1632,10 @@ public class BundleCore {
         return eprMedicationRequest;
     }
 
-    public Medication searchAddMedication(String medicationId, Medication Medication) throws OperationOutcomeException {
+    public Medication searchAddMedication(String medicationId, Medication medication) throws OperationOutcomeException {
         log.debug("Medication searchAdd " +medicationId);
 
-        if (Medication == null) throw new InternalErrorException("Bundle processing error");
+        if (medication == null) throw new InternalErrorException("Bundle processing error");
 
         org.hl7.fhir.dstu3.model.Medication eprMedication = (org.hl7.fhir.dstu3.model.Medication) resourceMap.get(medicationId);
 
@@ -1541,23 +1645,11 @@ public class BundleCore {
 
         InputStream inputStream = null;
 
-        for (Coding code : Medication.getCode().getCoding()) {
-            Exchange exchange = template.send("direct:EPRServer", ExchangePattern.InOut, new Processor() {
-                public void process(Exchange exchange) throws Exception {
-                    exchange.getIn().setHeader(Exchange.HTTP_QUERY, "code=" + code.getSystem() + "|" + code.getCode());
-                    exchange.getIn().setHeader(Exchange.HTTP_METHOD, "GET");
-                    exchange.getIn().setHeader(Exchange.HTTP_PATH, "Medication");
-                }
-            });
-            inputStream = (InputStream) exchange.getIn().getBody();
-            Reader reader = new InputStreamReader(inputStream);
-            IBaseResource iresource = null;
-            try {
-                iresource = ctx.newJsonParser().parseResource(reader);
-            } catch(Exception ex) {
-                log.error("JSON Parse failed " + ex.getMessage());
-                throw new InternalErrorException(ex.getMessage());
-            }
+        for (Coding code : medication.getCode().getCoding()) {
+
+
+            IBaseResource iresource = clientEPR.search().forResource(Medication.class).where(Medication.CODE.exactly().systemAndCode(code.getSystem(),code.getCode())).returnBundle(Bundle.class).execute();
+
             if (iresource instanceof OperationOutcome) {
                 processOperationOutcome((OperationOutcome) iresource);
             } else
@@ -1579,19 +1671,18 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "Medication";
         // Location found do not add
         if (eprMedication != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(medicationId, eprMedication);
             // Want id value, no path or resource
-            xhttpPath = "Medication/"+eprMedication.getIdElement().getIdPart();
-            Medication.setId(eprMedication.getId());
+            medication.setId(eprMedication.getId());
+            iResource = updateResource(medication);
+        } else {
+            iResource = createResource(medication);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(Medication);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
 
         if (iResource instanceof org.hl7.fhir.dstu3.model.Medication) {
             eprMedication = (org.hl7.fhir.dstu3.model.Medication) iResource;
@@ -1663,19 +1754,20 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "RiskAssessment";
+
         // Location found do not add
         if (eprRiskAssessment != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(riskAssessmentId,eprRiskAssessment);
             // Want id value, no path or resource
-            xhttpPath = "RiskAssessment/"+eprRiskAssessment.getIdElement().getIdPart();
             riskAssessment.setId(eprRiskAssessment.getId());
+            iResource = updateResource(riskAssessment);
+        } else {
+            iResource =createResource(riskAssessment);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(riskAssessment);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
+
 
         if (iResource instanceof RiskAssessment) {
             eprRiskAssessment = (RiskAssessment) iResource;
@@ -1755,10 +1847,10 @@ public class BundleCore {
             // Want id value, no path or resource
             xhttpPath = "ClinicalImpression/"+eprClinicalImpression.getIdElement().getIdPart();
             impression.setId(eprClinicalImpression.getId());
+            iResource = updateResource(impression);
+        } else {
+            iResource = createResource(impression);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(impression);
-
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof ClinicalImpression) {
             eprClinicalImpression = (ClinicalImpression) iResource;
@@ -1858,10 +1950,11 @@ public class BundleCore {
             // Want id value, no path or resource
             xhttpPath = "Consent/"+eprConsent.getIdElement().getIdPart();
             consent.setId(eprConsent.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(consent);
+            iResource = updateResource(consent);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+        } else {
+            iResource = createResource(consent);
+        }
 
         if (iResource instanceof Consent) {
             eprConsent = (Consent) iResource;
@@ -1927,19 +2020,17 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "Flag";
         // Location found do not add
         if (eprFlag != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(flagId,eprFlag);
             // Want id value, no path or resource
-            xhttpPath = "Flag/"+eprFlag.getIdElement().getIdPart();
             flag.setId(eprFlag.getId());
+            iResource = updateResource(flag);
+        } else {
+            iResource = createResource(flag);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(flag);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof Flag) {
             eprFlag = (Flag) iResource;
@@ -2009,10 +2100,11 @@ public class BundleCore {
             // Want id value, no path or resource
             xhttpPath = "Goal/"+eprGoal.getIdElement().getIdPart();
             goal.setId(eprGoal.getId());
+            iResource = updateResource(goal);
+        } else {
+            iResource = createResource(goal);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(goal);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof Goal) {
             eprGoal = (Goal) iResource;
@@ -2132,10 +2224,12 @@ public class BundleCore {
             // Want id value, no path or resource
             xhttpPath = "MedicationDispense/"+eprMedicationDispense.getIdElement().getIdPart();
             medicationDispense.setId(eprMedicationDispense.getId());
+            iResource = updateResource(medicationDispense);
+        } else {
+            iResource = createResource(medicationDispense);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(medicationDispense);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+
 
         if (iResource instanceof MedicationDispense) {
             eprMedicationDispense = (MedicationDispense) iResource;
@@ -2233,19 +2327,17 @@ public class BundleCore {
 
         IBaseResource iResource = null;
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "MedicationAdministration";
+
         // Location found do not add
         if (eprMedicationAdministration != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(medicationAdministrationId,eprMedicationAdministration);
             // Want id value, no path or resource
-            xhttpPath = "MedicationAdministration/"+eprMedicationAdministration.getIdElement().getIdPart();
             medicationAdministration.setId(eprMedicationAdministration.getId());
+            iResource = updateResource(medicationAdministration);
+        } else {
+            iResource = createResource(medicationAdministration);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(medicationAdministration);
-
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof MedicationAdministration) {
             eprMedicationAdministration = (MedicationAdministration) iResource;
@@ -2374,10 +2466,10 @@ public class BundleCore {
             // Want id value, no path or resource
             xhttpPath = "MedicationStatement/"+eprMedicationStatement.getIdElement().getIdPart();
             medicationStatement.setId(eprMedicationStatement.getId());
+            iResource = updateResource(medicationStatement);
+        } else {
+            iResource = createResource(medicationStatement);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(medicationStatement);
-
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof MedicationStatement) {
             eprMedicationStatement = (MedicationStatement) iResource;
@@ -2455,10 +2547,10 @@ public class BundleCore {
             // Want id value, no path or resource
             xhttpPath = "Condition/"+eprCondition.getIdElement().getIdPart();
             condition.setId(eprCondition.getId());
+            iResource = updateResource(condition);
+        } else {
+            iResource = createResource(condition);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(condition);
-
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof Condition) {
             eprCondition = (Condition) iResource;
@@ -2643,7 +2735,7 @@ public class BundleCore {
                 String[] path = edmsExchange.getIn().getHeader("Location").toString().split("/");
                 String resourceId = path[path.length - 1];
                 log.info("Binary resource Id = " + resourceId);
-                //contentComponent.getAttachment().setUrl(hapiBase + "/Binary/" + resourceId);
+
                 binary.setId(resourceId);
             }
         } catch(Exception ex) {
@@ -2739,10 +2831,10 @@ public class BundleCore {
             // Want id value, no path or resource
             xhttpPath = "DocumentReference/"+eprDocumentReference.getIdElement().getIdPart();
             documentReference.setId(eprDocumentReference.getId());
+            iResource = updateResource(documentReference);
+        } else {
+            iResource = createResource(documentReference);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(documentReference);
-
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof DocumentReference) {
             eprDocumentReference = (DocumentReference) iResource;
@@ -2823,19 +2915,15 @@ public class BundleCore {
         procedure.setReasonReference(reasons);
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "Procedure";
+
         // Location found do not add
         if (eprProcedure != null) {
-            xhttpMethod="PUT";
-            setResourceMap(procedureId,eprProcedure);
-            // Want id value, no path or resource
-            xhttpPath = "Procedure/"+eprProcedure.getIdElement().getIdPart();
-            procedure.setId(eprProcedure.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(procedure);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            procedure.setId(eprProcedure.getId());
+            iResource = updateResource(procedure);
+        } else {
+            iResource = createResource(procedure);
+        }
 
         if (iResource instanceof Procedure) {
             eprProcedure = (Procedure) iResource;
@@ -2937,19 +3025,17 @@ public class BundleCore {
         referralRequest.setReasonReference(reasons);
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "ReferralRequest";
+
         // Location found do not add
         if (eprReferralRequest != null) {
-            xhttpMethod="PUT";
-            setResourceMap(referralRequestId,eprReferralRequest);
-            // Want id value, no path or resource
-            xhttpPath = "ReferralRequest/"+eprReferralRequest.getIdElement().getIdPart();
-            referralRequest.setId(eprReferralRequest.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(referralRequest);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            setResourceMap(referralRequestId,eprReferralRequest);
+
+            referralRequest.setId(eprReferralRequest.getId());
+            iResource = updateResource(referralRequest);
+        } else {
+            iResource = createResource(referralRequest);
+        }
 
         if (iResource instanceof ReferralRequest) {
             eprReferralRequest = (ReferralRequest) iResource;
@@ -3096,19 +3182,18 @@ public class BundleCore {
         }
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "Encounter";
+
         // Location found do not add
         if (eprEncounter != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(encounterId,eprEncounter);
             // Want id value, no path or resource
-            xhttpPath = "Encounter/"+eprEncounter.getIdElement().getIdPart();
-            encounter.setId(eprEncounter.getId());
-        }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(encounter);
 
-        iResource = sendResource(xhttpMethod,xhttpPath,httpBody);
+            encounter.setId(eprEncounter.getId());
+            iResource = updateResource(encounter);
+        } else {
+            iResource = createResource(encounter);
+        }
 
         if (iResource instanceof Encounter) {
             eprEncounter = (Encounter) iResource;
@@ -3195,19 +3280,16 @@ public class BundleCore {
 
 
         IBaseResource iResource = null;
-        String xhttpMethod = "POST";
-        String xhttpPath = "EpisodeOfCare";
         // Location found do not add
         if (eprEpisodeOfCare != null) {
-            xhttpMethod="PUT";
+
             setResourceMap(episodeOfCareId,eprEpisodeOfCare);
             // Want id value, no path or resource
-            xhttpPath = "EpisodeOfCare/"+eprEpisodeOfCare.getIdElement().getIdPart();
             episodeOfCare.setId(eprEpisodeOfCare.getId());
+            iResource = updateResource(episodeOfCare);
+        } else {
+            iResource = createResource(episodeOfCare);
         }
-        String httpBody = ctx.newJsonParser().encodeResourceToString(episodeOfCare);
-
-        iResource = sendResource( xhttpMethod,xhttpPath,httpBody);
 
         if (iResource instanceof EpisodeOfCare) {
             eprEpisodeOfCare = (EpisodeOfCare) iResource;
@@ -3275,9 +3357,9 @@ public class BundleCore {
             }
 
             IBaseResource iResource = null;
-            String jsonResource = ctx.newJsonParser().encodeResourceToString(patient);
 
-            iResource = sendResource("POST","Patient",jsonResource);
+            iResource = createResource(patient);
+
 
             if (iResource instanceof Patient) {
                 eprPatient = (Patient) iResource;
@@ -3316,20 +3398,6 @@ public class BundleCore {
                 }
             }
         }
-        // Questionnaire is a reference resource so use Url
-        if (eprQuestionnaire != null && form.hasUrl()) {
-
-            IBaseResource iresource = queryResourceUrl( form.getUrl(), "Questionnaire");
-
-            if (iresource instanceof Bundle) {
-                Bundle returnedBundle = (Bundle) iresource;
-                if (returnedBundle.getEntry().size() > 0) {
-                    eprQuestionnaire = (Questionnaire) returnedBundle.getEntry().get(0).getResource();
-                    log.debug("Found Questionnaire = " + eprQuestionnaire.getId());
-                }
-            }
-        }
-
         // Questionnaire found do not add
         if (eprQuestionnaire != null) {
             setResourceMap(formId, eprQuestionnaire);
@@ -3341,18 +3409,14 @@ public class BundleCore {
 
 
 
-        String xhttpMethod = "POST";
-        String xhttpPath = "Questionnaire";
         // Location found do not add
         if (eprQuestionnaire != null) {
-            xhttpMethod="PUT";
-           // setResourceMap(formId,eprEpisodeOfCare);
-            // Want id value, no path or resource
-            xhttpPath = "Questionnaire/"+eprQuestionnaire.getIdElement().getIdPart();
+
             form.setId(eprQuestionnaire.getId());
+            iResource = updateResource(form);
+        } else {
+            iResource = createResource(form);
         }
-        String jsonResource = ctx.newJsonParser().encodeResourceToString(form);
-        iResource = sendResource(xhttpMethod,xhttpPath,jsonResource);
 
         if (iResource instanceof Questionnaire) {
             eprQuestionnaire = (Questionnaire) iResource;
@@ -3396,17 +3460,16 @@ public class BundleCore {
 
             return eprRelatedPerson;
         }
-
+        IBaseResource iResource = null;
         if (person.getPatient() != null) {
             Resource resource = searchAddResource(person.getPatient().getReference());
             if (resource == null) referenceMissing(person, person.getPatient().getReference());
             person.setPatient(getReference(resource));
+            person.setId(resource.getId());
+            iResource = updateResource(person);
+        } else {
+            iResource = createResource(person);
         }
-
-        IBaseResource iResource = null;
-        String jsonResource = ctx.newJsonParser().encodeResourceToString(person);
-
-        iResource = sendResource("POST","RelatedPerson",jsonResource);
 
         if (iResource instanceof RelatedPerson) {
             eprRelatedPerson = (RelatedPerson) iResource;
