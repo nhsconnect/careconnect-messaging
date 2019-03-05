@@ -1185,12 +1185,17 @@ public class BundleCore {
             if (resource == null) referenceMissing(form, form.getSource().getReference());
             form.setSource(getReference(resource));
         }
+        /*
+
+        Just use URL - Assumption is the Questionnaire will be on a seperate system
+
         if (form.hasQuestionnaire() && form.getQuestionnaire().getReference() != null) {
             Resource resource = searchAddResource(form.getQuestionnaire().getReference());
 
             if (resource == null) referenceMissing(form, form.getQuestionnaire().getReference());
             form.setQuestionnaire(getReference(resource));
         }
+        */
         if (form.hasAuthor()) {
             Resource resource = searchAddResource(form.getAuthor().getReference());
 

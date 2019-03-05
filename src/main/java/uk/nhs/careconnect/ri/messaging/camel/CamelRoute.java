@@ -28,9 +28,6 @@ public class CamelRoute extends RouteBuilder {
 
 	public HapiContext hapiContext;
 
-	@Value("${fhir.restserver.eprBase}")
-	private String eprBase;
-
 	@Value("${fhir.restserver.edmsBase}")
 	private String edmsBase;
 
@@ -59,7 +56,7 @@ public class CamelRoute extends RouteBuilder {
 
 		FhirContext ctx = FhirContext.forDstu3();
 
-		FHIRClient eprClient = new FHIRClient(ctx,eprBase);
+		//FHIRClient eprClient = new FHIRClient(ctx,eprBase);
 
 		BundleMessage bundleMessage = new BundleMessage(ctx, eprBaseFHIR, edmsBaseFHIR);
         CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, messageBase, edmsBaseFHIR);
