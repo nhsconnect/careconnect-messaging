@@ -1245,14 +1245,15 @@ public class BundleCore {
             if (itemComponent.hasAnswer()) {
                 for (QuestionnaireResponse.QuestionnaireResponseItemAnswerComponent answerComponent : itemComponent.getAnswer()) {
                     if (answerComponent.hasValueReference()) {
-                        try {
-                            Resource resource = searchAddResource(answerComponent.getValueReference().getReference());
 
+                            Resource resource = searchAddResource(answerComponent.getValueReference().getReference());
+                            if (resource instanceof OperationOutcome)
+                            {
+                                processOperationOutcome((OperationOutcome) resource);
+                            }
                             if (resource == null) referenceMissing(form, answerComponent.getValueReference().getReference());
                             answerComponent.setValue(getReference(resource));
-                        } catch (Exception ex) {
 
-                        }
                     }
                 }
             }
