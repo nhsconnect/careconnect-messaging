@@ -3342,7 +3342,7 @@ public class BundleCore {
             if (eprPatient != null) {
                 setResourceMap(patientId, eprPatient);
 
-                return eprPatient;
+               // return eprPatient;
             }
 
             // Location not found. Add to database
@@ -3364,7 +3364,13 @@ public class BundleCore {
 
             IBaseResource iResource = null;
 
+        if (eprPatient != null) {
+
+            patient.setId(eprPatient.getId());
+            iResource = updateResource(patient);
+        } else {
             iResource = createResource(patient);
+        }
 
 
             if (iResource instanceof Patient) {
