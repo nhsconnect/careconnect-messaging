@@ -52,6 +52,18 @@ public class ProviderResponseLibrary {
         }
     }
 
+    public static void createExceptionDSTU2(FhirContext ctx, IBaseResource resource) throws Exception {
+        if (resource instanceof OperationOutcome)
+        {
+            OperationOutcome operationOutcome = (OperationOutcome) resource;
+            log.info("Sever Returned: "+ctx.newJsonParser().encodeResourceToString(operationOutcome));
+
+            OperationOutcomeFactory.convertToException(operationOutcome);
+        } else {
+            throw new InternalErrorException("Server Error",(OperationOutcome) resource);
+        }
+    }
+
     public static IBaseResource processMessageBody(FhirContext ctx, IBaseResource resource, Object message ) {
         InputStream inputStream = null;
 

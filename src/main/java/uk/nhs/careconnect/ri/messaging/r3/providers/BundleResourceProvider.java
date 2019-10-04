@@ -1,4 +1,4 @@
-package uk.nhs.careconnect.ri.messaging.providers;
+package uk.nhs.careconnect.ri.messaging.r3.providers;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.annotation.*;
@@ -13,6 +13,7 @@ import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import uk.nhs.careconnect.ri.messaging.support.ProviderResponseLibrary;
 
@@ -25,6 +26,7 @@ public class BundleResourceProvider implements IResourceProvider {
     @Autowired
     CamelContext context;
 
+    @Qualifier("CTXR3")
     @Autowired
     FhirContext ctx;
 

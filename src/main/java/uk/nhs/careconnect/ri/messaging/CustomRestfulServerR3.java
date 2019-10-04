@@ -8,55 +8,32 @@ import ca.uhn.fhir.rest.server.HardcodedServerAddressStrategy;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.interceptor.CorsInterceptor;
-import ca.uhn.fhir.rest.server.interceptor.IServerInterceptor;
-import ca.uhn.fhir.rest.server.interceptor.ResponseHighlighterInterceptor;
 import ca.uhn.fhir.util.VersionUtil;
-
-import org.springframework.beans.factory.annotation.Autowire;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.web.cors.CorsConfiguration;
-import uk.nhs.careconnect.ri.messaging.providers.ConformanceProvider;
-import uk.nhs.careconnect.ri.messaging.providers.PatientResourceProvider;
+import uk.nhs.careconnect.ri.messaging.r3.providers.ConformanceProvider;
 import uk.nhs.careconnect.ri.messaging.support.ServerInterceptor;
-import uk.nhs.careconnect.ri.messaging.providers.BundleResourceProvider;
-
-
-
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServletResponse;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TimeZone;
 
 @WebServlet(urlPatterns = { "/*" }, displayName = "FHIR Server")
-public class CcriMessagingHAPIConfig extends RestfulServer {
+public class CustomRestfulServerR3 extends RestfulServer {
 
 	private static final long serialVersionUID = 1L;
-	private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CcriMessagingHAPIConfig.class);
+	private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CustomRestfulServerR3.class);
 	
 	private ApplicationContext applicationContext;
 
-	CcriMessagingHAPIConfig(ApplicationContext context) {
+	CustomRestfulServerR3(ApplicationContext context) {
 		this.applicationContext = context;
 	}
 
-	@Value("${ccri.software.name}")
-	private String softwareName;
 
-	@Value("${ccri.software.version}")
-	private String softwareVersion;
-
-	@Value("${ccri.server}")
-	private String server;
-
-	@Value("${ccri.server.base}")
-	private String serverBase;
-	
 	
 
     @Override
@@ -69,7 +46,7 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 	protected void initialize() throws ServletException {
 		super.initialize();
 		TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
-		String ccri_role =  this.applicationContext.getEnvironment().getProperty("ccri.role");
+		String ccri_role =  HapiProperties.getServerRole();
 		
 	//	@Value("#{'${ccri.Messaging_resources}'.split(',')}")
 		String resources =  this.applicationContext.getEnvironment().getProperty("ccri.Messaging_resources");
@@ -79,6 +56,7 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 		FhirVersionEnum fhirVersion = FhirVersionEnum.DSTU3;
 		setFhirContext(new FhirContext(fhirVersion));
 
+		String serverBase = HapiProperties.getServerBase();
 	     if (serverBase != null && !serverBase.isEmpty()) {
             setServerAddressStrategy(new HardcodedServerAddressStrategy(serverBase));
         }
@@ -107,7 +85,7 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 	        List<IResourceProvider> permissionlist = new ArrayList<>();
 	        for (String permission : permissions) {
 	            try {
-	                classType = Class.forName("uk.nhs.careconnect.ri.messaging.providers." + permission + "ResourceProvider");
+	                classType = Class.forName("uk.nhs.careconnect.ri.messaging.r3.providers." + permission + "ResourceProvider");
 	                log.info("class methods " + classType.getMethods()[4].getName() );
 	            } catch (ClassNotFoundException  e) {
 	                // TODO Auto-generated catch block
@@ -126,9 +104,9 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 		// Replace built in conformance provider (CapabilityStatement)
 		setServerConformanceProvider(new ConformanceProvider());
 
-		setServerName(softwareName);
-		setServerVersion(softwareVersion);
-		setImplementationDescription(server);
+		setServerName(HapiProperties.getServerName());
+		setServerVersion(HapiProperties.getSoftwareVersion());
+		setImplementationDescription(HapiProperties.getServerName());
 
 
 		CorsConfiguration config = new CorsConfiguration();
@@ -166,14 +144,6 @@ public class CcriMessagingHAPIConfig extends RestfulServer {
 		// Remove as believe due to issues on docker ctx.setNarrativeGenerator(new DefaultThymeleafNarrativeGenerator());
 	}
 
-	/**
-	 * This interceptor adds some pretty syntax highlighting in responses when a browser is detected
-	 */
-	@Bean(autowire = Autowire.BY_TYPE)
-	public IServerInterceptor responseHighlighterInterceptor() {
-		ResponseHighlighterInterceptor retVal = new ResponseHighlighterInterceptor();
-		return retVal;
-	}
 
 
 

@@ -4,9 +4,11 @@ package uk.nhs.careconnect.ri.messaging.camel;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.hl7v2.DefaultHapiContext;
 import ca.uhn.hl7v2.HapiContext;
+import org.apache.camel.CamelContext;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.component.hl7.HL7DataFormat;
+import org.apache.camel.impl.DefaultCamelContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -15,7 +17,6 @@ import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPostProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPreProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.processor.BundleMessage;
 import uk.nhs.careconnect.ri.messaging.camel.processor.CompositionDocumentBundle;
-import uk.nhs.careconnect.ri.messaging.camel.processor.FHIRClient;
 import uk.nhs.careconnect.ri.messaging.camel.processor.HL7v2A05toFHIRBundle;
 
 import java.io.InputStream;
@@ -47,21 +48,17 @@ public class CamelRoute extends RouteBuilder {
     @Override
     public void configure() 
     {
+		CamelContext context = new DefaultCamelContext();
+
 
 		GatewayPreProcessor camelProcessor = new GatewayPreProcessor();
 
 		GatewayPostProcessor camelPostProcessor = new GatewayPostProcessor();
 
-
-
 		FhirContext ctx = FhirContext.forDstu3();
-
-		//FHIRClient eprClient = new FHIRClient(ctx,eprBase);
 
 		BundleMessage bundleMessage = new BundleMessage(ctx, eprBaseFHIR, edmsBaseFHIR);
         CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, messageBase, edmsBaseFHIR);
-        //DocumentReferenceDocumentBundle documentReferenceDocumentBundle = new DocumentReferenceDocumentBundle(ctx,hapiBase);
-       // BinaryResource binaryResource = new BinaryResource(ctx, hapiBase);
 
 		hapiContext = new DefaultHapiContext();
 

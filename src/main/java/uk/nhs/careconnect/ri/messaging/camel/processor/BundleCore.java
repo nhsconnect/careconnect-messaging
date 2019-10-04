@@ -457,7 +457,7 @@ public class BundleCore {
         log.info("Create "+resource.getClass().getSimpleName());
         MethodOutcome outcome =  clientEPR.create().resource(resource).execute();
 
-        if (outcome.getCreated()) return outcome.getResource();
+        if (outcome.getCreated() != null) return outcome.getResource();
 
         processOperationOutcome((OperationOutcome) outcome.getOperationOutcome());
 

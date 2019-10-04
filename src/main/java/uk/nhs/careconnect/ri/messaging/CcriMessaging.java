@@ -45,23 +45,29 @@ public class CcriMessaging {
     public static void main(String[] args) {
         System.setProperty("hawtio.authenticationEnabled", "false");
         System.setProperty("management.security.enabled","false");
-//        System.setProperty("server.port", "8182");
- //       System.setProperty("server.context-path", "/ccri-messaging");
         System.setProperty("management.contextPath","");
         SpringApplication.run(CcriMessaging.class, args);
 
     }
 
     @Bean
-    public ServletRegistrationBean ServletRegistrationBean() {
-        ServletRegistrationBean registration = new ServletRegistrationBean(new CcriMessagingHAPIConfig(context), "/STU3/*");
-        registration.setName("FhirServlet");
+    public ServletRegistrationBean servletRegistrationBeanR3() {
+        ServletRegistrationBean registration = new ServletRegistrationBean(new CustomRestfulServerR3(context), "/STU3/*");
+        registration.setName("FhirServletR3");
         registration.setLoadOnStartup(1);
         return registration;
     }
 
     @Bean
-    public FhirContext getFhirContext() {
+    public ServletRegistrationBean servletRegistrationBeanDSTU2() {
+        ServletRegistrationBean registration = new ServletRegistrationBean(new CustomRestfulServerDSTU2(context), "/DSTU2/*");
+        registration.setName("FhirServletDSTU2");
+        registration.setLoadOnStartup(2);
+        return registration;
+    }
+
+    @Bean(name="CTXR3")
+    public FhirContext getFhirContextR3() {
 
         System.setProperty("ccri.server.base",this.serverBase);
         System.setProperty("ccri.software.name",this.softwareName);
@@ -69,6 +75,12 @@ public class CcriMessaging {
         System.setProperty("ccri.guide",this.guide);
         System.setProperty("ccri.server",this.server);
         return FhirContext.forDstu3();
+    }
+
+    @Bean(name="CTXDSTU2")
+    public FhirContext getFhirContextDSTU2() {
+
+        return FhirContext.forDstu2Hl7Org();
     }
 
     @Bean
@@ -114,7 +126,7 @@ public class CcriMessaging {
 
             @Override
             public void afterApplicationStart(CamelContext camelContext) {
-
+                // Empty method
             }
         };
     }

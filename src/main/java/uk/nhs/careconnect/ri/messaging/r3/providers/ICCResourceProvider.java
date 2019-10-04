@@ -1,4 +1,4 @@
-package uk.nhs.careconnect.ri.messaging.providers;
+package uk.nhs.careconnect.ri.messaging.r3.providers;
 
 import ca.uhn.fhir.rest.server.IResourceProvider;
 

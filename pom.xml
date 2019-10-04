@@ -6,7 +6,7 @@
 
     <groupId>uk.nhs.careconnect.ri</groupId>
     <artifactId>ccri-messaging</artifactId>
-    <version>3.7.1-SNAPSHOT</version>
+    <version>4.0.0-SNAPSHOT</version>
     <name>ccri-messaging</name>
 
 
@@ -18,7 +18,7 @@
         <hapi-fhir-version>3.7.0</hapi-fhir-version>
         <hapi-hl7v2-version>2.3</hapi-hl7v2-version>
         <care-connect-version>3.5.4</care-connect-version>
-        <camel-version>2.23.1</camel-version>
+        <camel-version>2.23.4</camel-version>
         <hawtio.version>2.5.0</hawtio.version>
     </properties>
 
@@ -217,6 +217,12 @@
 
         <dependency>
             <groupId>ca.uhn.hapi.fhir</groupId>
+            <artifactId>hapi-fhir-structures-hl7org-dstu2</artifactId>
+            <version>${hapi-fhir-version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>ca.uhn.hapi.fhir</groupId>
             <artifactId>hapi-fhir-structures-dstu3</artifactId>
             <version>${hapi-fhir-version}</version>
         </dependency>
@@ -229,10 +235,15 @@
 
 
         <dependency>
-        <groupId>ca.uhn.hapi.fhir</groupId>
-        <artifactId>hapi-fhir-validation-resources-dstu3</artifactId>
-        <version>${hapi-fhir-version}</version>
-    </dependency>
+            <groupId>ca.uhn.hapi.fhir</groupId>
+            <artifactId>hapi-fhir-validation-resources-dstu2</artifactId>
+            <version>${hapi-fhir-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>ca.uhn.hapi.fhir</groupId>
+            <artifactId>hapi-fhir-validation-resources-dstu3</artifactId>
+            <version>${hapi-fhir-version}</version>
+        </dependency>
         <dependency>
             <groupId>ca.uhn.hapi.fhir</groupId>
             <artifactId>hapi-fhir-validation-resources-r4</artifactId>
@@ -252,6 +263,13 @@
             <version>${care-connect-version}</version>
         </dependency>
 
+
+        <!-- JDK 11 inlcudes -->
+        <dependency>
+            <groupId>javax.activation</groupId>
+            <artifactId>activation</artifactId>
+            <version>1.1.1</version>
+        </dependency>
 
         <!-- Needed for JEE/Servlet support -->
         <dependency>
@@ -313,12 +331,18 @@
             <!-- Tell Maven which Java source version you want to use -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.5</version>
-
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>2.4</version>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <skip>false</skip>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <release>11</release>
                 </configuration>
             </plugin>
             <plugin>
