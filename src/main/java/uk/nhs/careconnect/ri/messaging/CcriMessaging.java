@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import uk.nhs.careconnect.ri.messaging.support.CareConnectDSTU2toSTU3;
 import uk.nhs.careconnect.ri.messaging.support.CorsFilter;
 
 @SpringBootApplication
@@ -24,23 +25,6 @@ public class CcriMessaging {
 
     @Autowired
     ApplicationContext context;
-
-
-
-    @Value("${ccri.software.version}")
-    String softwareVersion;
-
-    @Value("${ccri.software.name}")
-    String softwareName;
-
-    @Value("${ccri.server}")
-    String server;
-
-    @Value("${ccri.guide}")
-    String guide;
-
-    @Value("${ccri.server.base}")
-    String serverBase;
 
     public static void main(String[] args) {
         System.setProperty("hawtio.authenticationEnabled", "false");
@@ -68,12 +52,6 @@ public class CcriMessaging {
 
     @Bean(name="CTXR3")
     public FhirContext getFhirContextR3() {
-
-        System.setProperty("ccri.server.base",this.serverBase);
-        System.setProperty("ccri.software.name",this.softwareName);
-        System.setProperty("ccri.software.version",this.softwareVersion);
-        System.setProperty("ccri.guide",this.guide);
-        System.setProperty("ccri.server",this.server);
         return FhirContext.forDstu3();
     }
 
@@ -104,6 +82,11 @@ public class CcriMessaging {
         FilterRegistrationBean bean = new FilterRegistrationBean(new CorsFilter());
         bean.setOrder(0);
         return bean;
+    }
+
+    @Bean
+    public CareConnectDSTU2toSTU3 careConnectDSTU2toSTU3() {
+        return new CareConnectDSTU2toSTU3();
     }
 
 

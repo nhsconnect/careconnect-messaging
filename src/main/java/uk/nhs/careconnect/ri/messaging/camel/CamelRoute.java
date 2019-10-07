@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import uk.nhs.careconnect.ri.messaging.HapiProperties;
 import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPostProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPreProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.processor.BundleMessage;
@@ -29,20 +30,6 @@ public class CamelRoute extends RouteBuilder {
 
 	public HapiContext hapiContext;
 
-	@Value("${fhir.restserver.edmsBase}")
-	private String edmsBase;
-
-	@Value("${fhir.restserver.tkwBase}")
-	private String tkwBase;
-	
-	@Value("${ccri.server.base}")
-    private String messageBase;
-
-	@Value("${ccri.edms.server.base}")
-	private String edmsBaseFHIR;
-
-	@Value("${ccri.epr.server.base}")
-	private String eprBaseFHIR;
 
 	
     @Override
@@ -57,8 +44,8 @@ public class CamelRoute extends RouteBuilder {
 
 		FhirContext ctx = FhirContext.forDstu3();
 
-		BundleMessage bundleMessage = new BundleMessage(ctx, eprBaseFHIR, edmsBaseFHIR);
-        CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, messageBase, edmsBaseFHIR);
+		BundleMessage bundleMessage = new BundleMessage(ctx, HapiProperties.getServerBase("epr"), HapiProperties.getServerBase("edms"));
+        CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, HapiProperties.getServerBase(), HapiProperties.getServerBase("edms"));
 
 		hapiContext = new DefaultHapiContext();
 
@@ -112,7 +99,7 @@ public class CamelRoute extends RouteBuilder {
 			.routeId("TKW FHIR Server")
 			.process(camelProcessor)
 			.to("log:uk.nhs.careconnect.FHIRGateway.start?level=INFO&showHeaders=true&showExchangeId=true")
-			.to(tkwBase)
+			.to(HapiProperties.getCamelRoute("tkw"))
 			.process(camelPostProcessor)
 			.to("log:uk.nhs.careconnect.FHIRGateway.complete?level=INFO&showHeaders=true&showExchangeId=true")
 			.convertBodyTo(InputStream.class);
@@ -120,26 +107,14 @@ public class CamelRoute extends RouteBuilder {
 		// EPR Server
 
 
-
-
 		from("direct:EDMSServer")
 				.routeId("EDMS FHIR Server")
 				.to("log:uk.nhs.careconnect.FHIRGateway.start?level=INFO&showHeaders=true&showExchangeId=true")
-				.to(edmsBase)
+				.to(HapiProperties.getCamelRoute("edms"))
 				.process(camelPostProcessor)
 				.to("log:uk.nhs.careconnect.FHIRGateway.complete?level=INFO&showHeaders=true&showExchangeId=true")
 				.convertBodyTo(InputStream.class);
 
-		/*
-		from("direct:EPRServer")
-            .routeId("EPR FHIR Server")
-				.process(camelProcessor)
-				.to("log:uk.nhs.careconnect.FHIRGateway.start?level=INFO&showHeaders=true&showExchangeId=true")
-				.process(eprClient)
-                //.to(eprBase)
-				.process(camelPostProcessor)
-                .to("log:uk.nhs.careconnect.FHIRGateway.complete?level=INFO&showHeaders=true&showExchangeId=true")
-				.convertBodyTo(InputStream.class);
-*/
+
     }
 }

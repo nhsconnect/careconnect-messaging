@@ -95,7 +95,7 @@ public class HapiProperties {
     static final String SERVER_CRUD_CREATE = "ccri.CRUD_create";
     static final String SERVER_CRUD_DELETE = "ccri.CRUD_delete";
 
-
+    static final String CAMEL_ROUTE = "camel.route.";
 
     static final String SNOMED_VERSION_URL = "terminology.snomed.version";
     private static Properties properties;
@@ -332,6 +332,14 @@ public class HapiProperties {
 
     public static String getServerBase() {
         return HapiProperties.getProperty(SERVER_BASE, "/fhir");
+    }
+
+    public static String getServerBase(String  system) {
+        return HapiProperties.getProperty(SERVER_BASE+"."+system, "/fhir");
+    }
+
+    public static String getCamelRoute(String system) {
+        return HapiProperties.getProperty(CAMEL_ROUTE+system, "");
     }
 
     public static String getServerName() {

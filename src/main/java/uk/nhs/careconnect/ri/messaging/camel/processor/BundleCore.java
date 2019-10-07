@@ -15,6 +15,7 @@ import org.hl7.fhir.instance.model.api.IBase;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import uk.nhs.careconnect.ri.messaging.HapiProperties;
 import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeException;
 import uk.nhs.careconnect.ri.messaging.support.OperationOutcomeFactory;
 
@@ -34,7 +35,7 @@ public class BundleCore {
         this.ctx = ctx;
         this.bundle = bundle;
         this.context = camelContext;
-        this.clientODS = FhirContext.forDstu3().newRestfulGenericClient("https://directory.spineservices.nhs.uk/STU3");
+        this.clientODS = FhirContext.forDstu3().newRestfulGenericClient(HapiProperties.getServerBase("ods"));
         this.clientEPR = FhirContext.forDstu3().newRestfulGenericClient(eprBase);
         this.clientEDMS = FhirContext.forDstu3().newRestfulGenericClient(edmsBase);
         this.eprBase = eprBase;
@@ -1173,7 +1174,7 @@ public class BundleCore {
             if (resource == null) referenceMissing(form, form.getContext().getReference());
             form.setContext(getReference(resource));
         }
-        if (form.getSubject() != null) {
+        if (form.hasSubject()) {
             Resource resource = searchAddResource(form.getSubject().getReference());
 
             if (resource == null) referenceMissing(form, form.getSubject().getReference());

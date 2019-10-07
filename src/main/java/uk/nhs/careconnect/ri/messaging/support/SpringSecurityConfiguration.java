@@ -7,24 +7,22 @@ import org.springframework.security.config.annotation.authentication.builders.Au
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import uk.nhs.careconnect.ri.messaging.HapiProperties;
 
 @Configuration
 @EnableWebSecurity
 public class SpringSecurityConfiguration extends WebSecurityConfigurerAdapter {
 
-    @Value("${jolokia.username}")
-    private String jolokiaUsername;
 
-    @Value("${jolokia.password}")
-    private String jolokiaPassword;
 
     @Autowired
     public void configureGlobalSecurity(AuthenticationManagerBuilder auth) throws Exception {
         auth.inMemoryAuthentication()
-                .withUser(jolokiaUsername)
-                .password(jolokiaPassword)
+                .withUser(HapiProperties.getAppUser())
+                .password(HapiProperties.getAppPassword())
                 .roles("ACTUATOR");
     }
+
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {

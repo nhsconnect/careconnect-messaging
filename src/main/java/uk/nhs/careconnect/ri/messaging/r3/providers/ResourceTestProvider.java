@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import uk.nhs.careconnect.ri.messaging.HapiProperties;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -24,9 +25,7 @@ import java.io.Reader;
 @Component
 public class ResourceTestProvider {
 
-	@Value("${ccri.validate_flag}")
-	private Boolean validate_flag;
-	
+
     @Autowired
     CamelContext context;
 
@@ -41,7 +40,7 @@ public class ResourceTestProvider {
                                   @Validate.Profile String theProfile) {
         log.info("Checking testresource");
     	
-    	if(!validate_flag)
+    	if(!HapiProperties.getValidationFlag())
     	{
     		MethodOutcome retVal = new MethodOutcome();
     		retVal.setOperationOutcome(null);

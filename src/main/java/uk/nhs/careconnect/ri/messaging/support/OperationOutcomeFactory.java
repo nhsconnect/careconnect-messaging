@@ -55,6 +55,58 @@ public class OperationOutcomeFactory {
         return issueType;
     }
 
+    public static void convertToException (org.hl7.fhir.instance.model.OperationOutcome outcome ) throws BaseServerResponseException {
+        for (org.hl7.fhir.instance.model.OperationOutcome.OperationOutcomeIssueComponent issue : outcome.getIssue()) {
+
+            // TODO Revist the mapping here.
+            String text = null;
+            String diagnostics = "";
+            if (issue.getDiagnostics() != null ) diagnostics = issue.getDiagnostics();
+            if (issue.getDetails() != null) text =issue.getDetails().getText();
+
+            if (text ==null && issue.getDiagnostics() !=null) text = issue.getDiagnostics();
+
+            if (text==null) text = "Unknown Reason";
+
+            switch (issue.getCode()) {
+                case NOTFOUND:
+                    throw new ResourceNotFoundException(text,outcome);
+                case PROCESSING:
+
+                    if (diagnostics.contains("The FHIR endpoint on this server does not know how to handle")) {
+                        throw new NotImplementedOperationException(text,outcome);
+                    } else {
+                        throw new UnprocessableEntityException(text, outcome);
+                    }
+                case SECURITY:
+                    throw new AuthenticationException();
+                case INVALID:
+                    // 400
+                    throw new InvalidRequestException(text,outcome);
+                case EXCEPTION:
+                    throw new InternalErrorException(text,outcome);
+                case FORBIDDEN:
+                    throw new ForbiddenOperationException(text,outcome);
+                case CONFLICT:
+                    throw new ResourceVersionConflictException(text,outcome);
+                case NOTSUPPORTED:
+                    // 501
+                    throw new NotImplementedOperationException(text,outcome);
+                case DUPLICATE:
+                    throw new PreconditionFailedException(text,outcome);
+                case BUSINESSRULE:
+                    /// Check this is 405
+                    throw new MethodNotAllowedException(text,outcome);
+
+                default:
+                    throw new UnprocessableEntityException(text, outcome);
+
+            }
+        }
+        // Catch all
+        throw new UnprocessableEntityException("Unknown Error", outcome);
+    }
+
     public static void convertToException (OperationOutcome outcome ) throws BaseServerResponseException {
         for (OperationOutcome.OperationOutcomeIssueComponent issue : outcome.getIssue()) {
 

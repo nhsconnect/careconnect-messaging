@@ -13,6 +13,8 @@ import org.hl7.fhir.instance.model.Enumerations;
 import org.hl7.fhir.instance.model.api.IPrimitiveType;
 import org.springframework.web.context.WebApplicationContext;
 import org.springframework.web.context.support.WebApplicationContextUtils;
+import uk.nhs.careconnect.ri.messaging.HapiProperties;
+
 import javax.servlet.http.HttpServletRequest;
 import java.util.Date;
 
@@ -45,18 +47,9 @@ public class ConformanceProvider extends ServerConformanceProvider {
         public Conformance getServerConformance(HttpServletRequest theRequest) {
 
             WebApplicationContext ctx = WebApplicationContextUtils.getWebApplicationContext(theRequest.getServletContext());
-            log.info("restful2 Server not null = " + ctx.getEnvironment().getProperty("ccri.validate_flag"));
-
-            String CRUD_update = ctx.getEnvironment().getProperty("ccri.CRUD_update");
-            String CRUD_delete = ctx.getEnvironment().getProperty("ccri.CRUD_delete");
-            String CRUD_create = ctx.getEnvironment().getProperty("ccri.CRUD_create");
-            String CRUD_read = ctx.getEnvironment().getProperty("ccri.CRUD_read");
+            log.info("restful2 Server not null = {}", HapiProperties.getValidationFlag());
 
 
-            String oauth2authorize = ctx.getEnvironment().getProperty("ccri.oauth2.authorize");
-            String oauth2token = ctx.getEnvironment().getProperty("ccri.oauth2.token");
-            String oauth2register = ctx.getEnvironment().getProperty("ccri.oauth2.register");
-            String oauth2 = ctx.getEnvironment().getProperty("ccri.oauth2");
 
             if (capabilityStatement != null && myCache) {
                 return capabilityStatement;
@@ -73,10 +66,10 @@ public class ConformanceProvider extends ServerConformanceProvider {
             capabilityStatement.getImplementation().setDescription(serverConfiguration.getImplementationDescription());
 
 
-            capabilityStatement.getSoftware().setName(System.getProperty("ccri.software.name"));
-            capabilityStatement.getSoftware().setVersion(System.getProperty("ccri.software.version"));
-            capabilityStatement.getImplementation().setDescription(System.getProperty("ccri.server"));
-            capabilityStatement.getImplementation().setUrl(System.getProperty("ccri.server.base"));
+            capabilityStatement.getSoftware().setName(HapiProperties.getServerName());
+            capabilityStatement.getSoftware().setVersion(HapiProperties.getSoftwareVersion());
+            capabilityStatement.getImplementation().setDescription(HapiProperties.getSoftwareImplementationDesc());
+            capabilityStatement.getImplementation().setUrl(HapiProperties.getSoftwareImplementationUrl());
 
             capabilityStatement.setStatus(Enumerations.ConformanceResourceStatus.ACTIVE);
             log.trace("restful Server not null");

@@ -47,22 +47,20 @@ public class ProviderResponseLibrary {
             log.info("Sever Returned: "+ctx.newJsonParser().encodeResourceToString(operationOutcome));
 
             OperationOutcomeFactory.convertToException(operationOutcome);
-        } else {
-            throw new InternalErrorException("Server Error",(OperationOutcome) resource);
-        }
-    }
-
-    public static void createExceptionDSTU2(FhirContext ctx, IBaseResource resource) throws Exception {
-        if (resource instanceof OperationOutcome)
+        } else if (resource instanceof org.hl7.fhir.instance.model.OperationOutcome)
         {
-            OperationOutcome operationOutcome = (OperationOutcome) resource;
+            org.hl7.fhir.instance.model.OperationOutcome operationOutcome = (org.hl7.fhir.instance.model.OperationOutcome) resource;
             log.info("Sever Returned: "+ctx.newJsonParser().encodeResourceToString(operationOutcome));
 
             OperationOutcomeFactory.convertToException(operationOutcome);
-        } else {
+        } else
+
+            {
             throw new InternalErrorException("Server Error",(OperationOutcome) resource);
         }
     }
+
+
 
     public static IBaseResource processMessageBody(FhirContext ctx, IBaseResource resource, Object message ) {
         InputStream inputStream = null;

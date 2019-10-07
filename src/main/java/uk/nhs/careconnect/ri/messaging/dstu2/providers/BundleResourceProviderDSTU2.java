@@ -5,23 +5,19 @@ import ca.uhn.fhir.rest.annotation.*;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import org.apache.camel.*;
-
-import org.hl7.fhir.convertors.VersionConvertorAdvisor30;
-import org.hl7.fhir.convertors.VersionConvertor_10_30;
-import org.hl7.fhir.dstu3.model.CodeSystem;
-import org.hl7.fhir.dstu3.model.ValueSet;
-import org.hl7.fhir.exceptions.FHIRException;
 import org.hl7.fhir.instance.model.Bundle;
 import org.hl7.fhir.instance.model.IdType;
-import org.hl7.fhir.instance.model.Resource;
+import org.hl7.fhir.instance.model.OperationOutcome;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import uk.nhs.careconnect.ri.messaging.support.CareConnectDSTU2toSTU3;
 import uk.nhs.careconnect.ri.messaging.support.ProviderResponseLibrary;
 
 import javax.servlet.http.HttpServletRequest;
@@ -41,32 +37,11 @@ public class BundleResourceProviderDSTU2 implements IResourceProvider {
     @Autowired()
     FhirContext ctxR3;
 
+    @Autowired
+    CareConnectDSTU2toSTU3 converterSTU3;
+
     private static final Logger log = LoggerFactory.getLogger(BundleResourceProviderDSTU2.class);
 
-    VersionConvertorAdvisor30 advisor = new VersionConvertorAdvisor30() {
-        @Override
-        public boolean ignoreEntry(org.hl7.fhir.dstu3.model.Bundle.BundleEntryComponent bundleEntryComponent) {
-            System.out.println("ignoreentry");
-            return false;
-        }
-
-        @Override
-        public Resource convert(org.hl7.fhir.dstu3.model.Resource resource) throws FHIRException {
-            System.out.println(resource.getId());
-            return null;
-        }
-
-        @Override
-        public void handleCodeSystem(CodeSystem codeSystem, ValueSet valueSet) throws FHIRException {
-            System.out.println("convertio");
-        }
-
-        @Override
-        public CodeSystem getCodeSystem(ValueSet valueSet) throws FHIRException {
-            System.out.println("getCodeSystem");
-            return null;
-        }
-    };
 
     @Override
     public Class<Bundle> getResourceType() {
@@ -98,12 +73,8 @@ public class BundleResourceProviderDSTU2 implements IResourceProvider {
         try {
             InputStream inputStream = null;
 
+            org.hl7.fhir.dstu3.model.Resource resourceR3 = converterSTU3.convert(bundleDSTU2);
 
-            VersionConvertor_10_30 convertor = new VersionConvertor_10_30(advisor);
-
-//            VersionConvertor_30_40 convertor_30_40 = new VersionConvertor_30_40();
-
-            org.hl7.fhir.dstu3.model.Resource resourceR3 = convertor.convertResource(bundleDSTU2);
             String newXmlResource = ctxR3.newXmlParser().encodeResourceToString(resourceR3);
 
             if (resourceR3 instanceof org.hl7.fhir.dstu3.model.Bundle) {
@@ -152,18 +123,23 @@ public class BundleResourceProviderDSTU2 implements IResourceProvider {
             if (resource instanceof Bundle) {
                // bundle = (org.hl7.fhir.dstu3.model.Bundle) resource;
             } else {
-                ProviderResponseLibrary.createExceptionDSTU2(ctx, resource);
+
+                ProviderResponseLibrary.createException(ctx, resource);
             }
-        } catch (Exception ex) {
-            log.error("XML Parse failed " + ex.getMessage());
+        }
+        catch (BaseServerResponseException baseException) {
+            throw baseException;
+        }
+        catch (Exception ex) {
+            log.error("XML Parse failed {}", ex.getMessage());
             throw new InternalErrorException(ex.getMessage());
         }
-        log.trace("RETURNED Resource " + resource.getClass().getSimpleName());
+        log.trace("RETURNED Resource {}", resource.getClass().getSimpleName());
 
 
         MethodOutcome method = new MethodOutcome();
 
-        ProviderResponseLibrary.setMethodOutcome(resource, method);
+        ProviderResponseLibrary.setMethodOutcome(new OperationOutcome(), method);
 
         return method;
     }
@@ -213,10 +189,15 @@ public class BundleResourceProviderDSTU2 implements IResourceProvider {
                 default:
                     // TODO
             }
-        } catch (Exception ex) {
-            log.error("XML Parse failed " + ex.getMessage());
+        }
+        catch (BaseServerResponseException baseException) {
+            throw baseException;
+        }
+        catch (Exception ex) {
+            log.error("XML Parse failed {}", ex.getMessage());
             throw new InternalErrorException(ex.getMessage());
         }
+        log.trace("RETURNED Resource {}", resource.getClass().getSimpleName());
         if (resource instanceof Bundle) {
             bundle = (Bundle) resource;
         } else {
@@ -226,7 +207,7 @@ public class BundleResourceProviderDSTU2 implements IResourceProvider {
 
         MethodOutcome method = new MethodOutcome();
 
-        ProviderResponseLibrary.setMethodOutcome(resource, method);
+        ProviderResponseLibrary.setMethodOutcome(new OperationOutcome(), method);
 
 
         return method;

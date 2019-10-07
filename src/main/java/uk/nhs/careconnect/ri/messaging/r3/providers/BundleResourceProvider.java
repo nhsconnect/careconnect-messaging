@@ -5,6 +5,7 @@ import ca.uhn.fhir.rest.annotation.*;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.rest.server.exceptions.InternalErrorException;
 import org.apache.camel.*;
 import org.hl7.fhir.dstu3.model.Bundle;
@@ -130,10 +131,14 @@ public class BundleResourceProvider implements IResourceProvider {
                     default:
                         // TODO
             }
-        } catch(Exception ex) {
-            log.error("XML Parse failed " + ex.getMessage());
+        } catch (BaseServerResponseException baseException) {
+            throw baseException;
+        }
+        catch (Exception ex) {
+            log.error("XML Parse failed {}", ex.getMessage());
             throw new InternalErrorException(ex.getMessage());
         }
+        log.trace("RETURNED Resource {}", resource.getClass().getSimpleName());
         log.trace("RETURNED Resource "+resource.getClass().getSimpleName());
 
         if (resource instanceof Bundle) {
@@ -194,10 +199,14 @@ public class BundleResourceProvider implements IResourceProvider {
                 default:
                     // TODO
             }
-        } catch(Exception ex) {
-            log.error("XML Parse failed " + ex.getMessage());
+        } catch (BaseServerResponseException baseException) {
+            throw baseException;
+        }
+        catch (Exception ex) {
+            log.error("XML Parse failed {}", ex.getMessage());
             throw new InternalErrorException(ex.getMessage());
         }
+        log.trace("RETURNED Resource {}", resource.getClass().getSimpleName());
         if (resource instanceof Bundle) {
             bundle = (Bundle) resource;
         } else {
