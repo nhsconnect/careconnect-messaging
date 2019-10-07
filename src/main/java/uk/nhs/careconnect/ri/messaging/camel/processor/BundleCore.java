@@ -456,6 +456,7 @@ public class BundleCore {
     {
 
         log.info("Create "+resource.getClass().getSimpleName());
+        log.info("OUT {}",ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(resource));
         MethodOutcome outcome =  clientEPR.create().resource(resource).execute();
 
         if (outcome.getCreated() != null) return outcome.getResource();

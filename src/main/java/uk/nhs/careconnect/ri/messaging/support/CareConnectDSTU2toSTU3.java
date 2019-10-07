@@ -76,6 +76,9 @@ public class CareConnectDSTU2toSTU3 {
                     }
                 }
             }
+            for (HumanName name : patient.getName()) {
+                if (name.hasUse() && name.getUse().equals(HumanName.NameUse.USUAL)) name.setUse(HumanName.NameUse.OFFICIAL);
+            }
         }
         if (resource instanceof Encounter) {
             Encounter encounter = (Encounter) resource;
