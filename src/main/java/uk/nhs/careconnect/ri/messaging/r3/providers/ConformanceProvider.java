@@ -56,7 +56,7 @@ public class ConformanceProvider extends ServerCapabilityStatementProvider {
         if (capabilityStatement != null && myCache) {
             return capabilityStatement;
         }
-        CapabilityStatement capabilityStatement = super.getServerConformance(theRequest);
+        capabilityStatement = super.getServerConformance(theRequest);
 
 
         capabilityStatement.setPublisher("NHS Digital");

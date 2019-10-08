@@ -455,8 +455,8 @@ public class BundleCore {
     public IBaseResource createResource( IBaseResource resource) throws OperationOutcomeException
     {
 
-        log.info("Create "+resource.getClass().getSimpleName());
-        log.info("OUT {}",ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(resource));
+        log.info("Create {}", resource.getClass().getSimpleName());
+        log.debug("OUT {}",ctx.newJsonParser().setPrettyPrint(true).encodeResourceToString(resource));
         MethodOutcome outcome =  clientEPR.create().resource(resource).execute();
 
         if (outcome.getCreated() != null) return outcome.getResource();
@@ -475,7 +475,6 @@ public class BundleCore {
         if (outcome.getOperationOutcome() != null) processOperationOutcome((OperationOutcome) outcome.getOperationOutcome());
 
         if (outcome.getResource() instanceof OperationOutcome) processOperationOutcome((OperationOutcome) outcome.getResource());
-
 
         return outcome.getResource();
 

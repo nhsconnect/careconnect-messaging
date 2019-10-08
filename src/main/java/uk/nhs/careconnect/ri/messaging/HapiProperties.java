@@ -159,15 +159,15 @@ public class HapiProperties {
 
     private static String getProperty(String propertyName) {
         Properties properties = HapiProperties.getProperties();
-        log.trace("Looking for property = {}", propertyName);
+        log.info("Looking for property = {}", propertyName);
         if (System.getenv(propertyName)!= null) {
             String value= System.getenv(propertyName);
-            log.debug("System Environment property Found {} = {}", propertyName, value);
+            log.info("System Environment property Found {} = {}", propertyName, value);
             return value;
         }
         if (System.getProperty(propertyName)!= null) {
             String value= System.getenv(propertyName);
-            log.debug("System Property Found {} = {}" , propertyName, value);
+            log.info("System Property Found {} = {}" , propertyName, value);
             return value;
         }
         if (properties != null) {

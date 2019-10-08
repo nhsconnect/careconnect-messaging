@@ -18,6 +18,7 @@ import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPostProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.interceptor.GatewayPreProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.processor.BundleMessage;
 import uk.nhs.careconnect.ri.messaging.camel.processor.CompositionDocumentBundle;
+import uk.nhs.careconnect.ri.messaging.camel.processor.EdmsProcessor;
 import uk.nhs.careconnect.ri.messaging.camel.processor.HL7v2A05toFHIRBundle;
 
 import java.io.InputStream;
@@ -43,6 +44,7 @@ public class CamelRoute extends RouteBuilder {
 		GatewayPostProcessor camelPostProcessor = new GatewayPostProcessor();
 
 		FhirContext ctx = FhirContext.forDstu3();
+		EdmsProcessor edmsProcessor = new EdmsProcessor(ctx);
 
 		BundleMessage bundleMessage = new BundleMessage(ctx, HapiProperties.getServerBase("epr"), HapiProperties.getServerBase("edms"));
         CompositionDocumentBundle compositionDocumentBundle = new CompositionDocumentBundle(ctx, HapiProperties.getServerBase(), HapiProperties.getServerBase("edms"));
@@ -111,6 +113,8 @@ public class CamelRoute extends RouteBuilder {
 				.routeId("EDMS FHIR Server")
 				.to("log:uk.nhs.careconnect.FHIRGateway.start?level=INFO&showHeaders=true&showExchangeId=true")
 				.to(HapiProperties.getCamelRoute("edms"))
+				//.unmarshal().fhirXml("DSTU3")
+				.process(edmsProcessor)
 				.process(camelPostProcessor)
 				.to("log:uk.nhs.careconnect.FHIRGateway.complete?level=INFO&showHeaders=true&showExchangeId=true")
 				.convertBodyTo(InputStream.class);

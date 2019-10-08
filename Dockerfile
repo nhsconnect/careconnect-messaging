@@ -1,4 +1,4 @@
-FROM openjdk:8-jdk-alpine
+FROM openjdk:11-slim
 VOLUME /tmp
 
 ADD target/ccri-messaging.jar ccri-messaging.jar
