@@ -17,10 +17,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import springfox.documentation.swagger2.annotations.EnableSwagger2;
 import uk.nhs.careconnect.ri.messaging.support.CareConnectDSTU2toSTU3;
 import uk.nhs.careconnect.ri.messaging.support.CorsFilter;
 
 @SpringBootApplication
+@EnableSwagger2
 public class CcriMessaging {
 
     @Autowired
